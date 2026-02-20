@@ -1,0 +1,24 @@
+# --- Go Binaries ---
+# Ignore the actual executable files created when you build
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# --- Editor / IDE ---
+# Ignore VS Code local settings
+.vscode/
+# Ignore JetBrains/IntelliJ files (just in case)
+.idea/
+
+# --- OS Specific ---
+# Windows thumbnail cache
+Thumbs.db
+# Mac folder settings (if you share with Mac users)
+.DS_Store
+
+# --- Security (VERY IMPORTANT) ---
+# Ignore environment variable files containing passwords
+.env
