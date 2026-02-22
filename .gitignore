@@ -22,3 +22,6 @@ Thumbs.db
 # --- Security (VERY IMPORTANT) ---
 # Ignore environment variable files containing passwords
 .env
+
+mosquitto.db
+mosquitto.log
