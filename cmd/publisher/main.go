@@ -61,7 +61,7 @@ type publisherConfig struct {
 func parseFlags() publisherConfig {
 	cfg := publisherConfig{}
 	flag.StringVar(&cfg.broker, "broker", "tcp://localhost:1883", "MQTT broker URI (e.g. tcp://localhost:1883)")
-	flag.StringVar(&cfg.topic, "topic", "sensors/test", "Topic to publish to")
+	flag.StringVar(&cfg.topic, "topic", "test/coba", "Topic to publish to")
 	flag.StringVar(&cfg.message, "message", "hello from publisher", "Message payload. If repeating and no format verbs are present, a counter suffix is added.")
 	flag.IntVar(&cfg.repeat, "repeat", 1, "Number of messages to publish")
 	flag.DurationVar(&cfg.interval, "interval", time.Second, "Delay between repeated publishes")
