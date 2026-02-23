@@ -61,8 +61,9 @@ func main() {
 		payload := msg.Payload()
 		t := msg.Topic()
 
-		// Special handling for DBlocker config topic: payload is 2-byte bitmask (big-endian)
-		if t == "dbl/250001/c" && len(payload) >= 2 {
+		// Decode only command topics with exact 2-byte payload (bitmask format).
+		// This avoids decoding string commands like "SLEEP".
+		if strings.HasSuffix(t, "/cmd") && len(payload) == 2 {
 			mask := uint16(payload[0])<<8 | uint16(payload[1])
 			fmt.Printf("📩 Received [%s]: raw=%v\n%s\n", t, payload, decodeDBlockerMask(mask))
 			return
