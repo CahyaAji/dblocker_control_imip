@@ -3,6 +3,7 @@ package main
 import (
 	handlerhttp "dblocker_control/internal/handler/http"
 	"dblocker_control/internal/infrastructure/database"
+	"dblocker_control/internal/infrastructure/database/repository"
 	"dblocker_control/internal/infrastructure/mqtt"
 	"dblocker_control/internal/route"
 	"dblocker_control/internal/service"
@@ -19,7 +20,6 @@ func main() {
 	}
 
 	mqttBroker := "tcp://127.0.0.1:1883"
-	topic := "test/coba"
 
 	mqttClient, err := mqtt.New(mqttBroker, "dblocker-server")
 	if err != nil {
@@ -27,9 +27,11 @@ func main() {
 	}
 	defer mqttClient.Close()
 
-	bridgeSvc, err := service.NewBridgeService(mqttClient, topic)
+	dblockerRepo := repository.NewDBlockerRepository(db)
+
+	bridgeSvc, err := service.NewBridgeService(mqttClient, dblockerRepo)
 	if err != nil {
-		log.Fatalf("Failed to subscribe to %s: %v", topic, err)
+		log.Fatalf("Failed to initialize bridge service: %v", err)
 	}
 
 	bridgeHandler := handlerhttp.NewBridgeHandler(bridgeSvc)
@@ -40,7 +42,7 @@ func main() {
 
 	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler)
 
-	log.Printf("Starting dblocker server on :8080 (bridging %s)", topic)
+	log.Printf("Starting dblocker server on :8080 (bridging %s)", bridgeSvc.Topic())
 	if err := r.Run(":8080"); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
