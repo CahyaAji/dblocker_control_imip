@@ -17,7 +17,29 @@ Open firewall ports:
 - `8080` for app API (or use reverse proxy later)
 - `1883` only if external devices need direct MQTT access
 
-### 2) Copy project to server
+### 2) Get project code on server
+
+You can use either method below.
+
+#### Option A: Clone from GitHub (recommended)
+
+On server:
+
+```bash
+sudo mkdir -p /opt
+cd /opt
+sudo git clone https://github.com/YOUR_ORG/YOUR_REPO.git dblocker_control_imip
+sudo chown -R $USER:$USER /opt/dblocker_control_imip
+cd /opt/dblocker_control_imip
+```
+
+If the repository is private, use SSH URL instead:
+
+```bash
+git clone git@github.com:YOUR_ORG/YOUR_REPO.git dblocker_control_imip
+```
+
+#### Option B: Copy from laptop using scp
 
 From your laptop:
 
@@ -92,6 +114,9 @@ cd /opt/dblocker_control_imip
 git pull
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
+
+If repository is private over HTTPS, use a GitHub Personal Access Token when prompted,
+or configure SSH keys once and use the SSH remote URL.
 
 ### 8) Backup important data
 
