@@ -7,7 +7,7 @@
     let source: EventSource | null = null;
 
     onMount(() => {
-        source = new EventSource(`${API_BASE}events`);
+        source = new EventSource(`${API_BASE}/events`);
         source.onopen = () => (status = "connected");
         source.onerror = () => (status = "error (will retry)");
         source.onmessage = (ev) => (messages = [...messages, ev.data]);
