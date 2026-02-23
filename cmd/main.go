@@ -17,7 +17,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	_ = db // Currently not used, but can be passed to services if needed
 
 	mqttBroker := "tcp://127.0.0.1:1883"
 	topic := "test/coba"
@@ -39,7 +38,7 @@ func main() {
 	//! remove this in production, only for development
 	r.Use(cors.Default())
 
-	route.RegisterHTTPRoutes(r, bridgeHandler)
+	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler)
 
 	log.Printf("Starting dblocker server on :8080 (bridging %s)", topic)
 	if err := r.Run(":8080"); err != nil {
