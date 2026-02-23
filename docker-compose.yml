@@ -11,6 +11,8 @@ services:
     environment:
       APP_PORT: 8080
       MQTT_BROKER: tcp://mosquitto:1883
+      MQTT_USERNAME: DBL0KER
+      MQTT_PASSWORD: '4;1Yf,)`'
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: scm
