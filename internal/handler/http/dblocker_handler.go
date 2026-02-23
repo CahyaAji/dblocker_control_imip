@@ -128,7 +128,7 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 		return
 	}
 
-	topic := fmt.Sprintf("dbl/%s/c", dblocker.SerialNumb)
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
 
 	// payload, err := json.Marshal(input.Config)
 
