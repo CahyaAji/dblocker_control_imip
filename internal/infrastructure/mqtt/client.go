@@ -3,6 +3,7 @@ package mqtt
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
@@ -34,6 +35,13 @@ func New(broker string, clientID string) (Client, error) {
 	opts.SetClientID(clientID)
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetAutoReconnect(true)
+
+	username := os.Getenv("MQTT_USERNAME")
+	password := os.Getenv("MQTT_PASSWORD")
+	if username != "" {
+		opts.SetUsername(username)
+		opts.SetPassword(password)
+	}
 
 	opts.OnConnect = func(c paho.Client) {
 		log.Println("Connected to MQTT broker")
