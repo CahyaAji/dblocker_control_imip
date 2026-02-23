@@ -1,0 +1,9 @@
+.git
+.gitignore
+README.md
+frontend/
+mosquitto/data/
+mosquitto/log/
+other/
+test/
+*.log

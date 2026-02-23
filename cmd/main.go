@@ -8,6 +8,7 @@ import (
 	"dblocker_control/internal/route"
 	"dblocker_control/internal/service"
 	"log"
+	"os"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -19,7 +20,8 @@ func main() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	mqttBroker := "tcp://127.0.0.1:1883"
+	mqttBroker := getEnv("MQTT_BROKER", "tcp://mosquitto:1883")
+	appPort := getEnv("APP_PORT", "8080")
 
 	mqttClient, err := mqtt.New(mqttBroker, "dblocker-server")
 	if err != nil {
@@ -42,8 +44,16 @@ func main() {
 
 	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler)
 
-	log.Printf("Starting dblocker server on :8080 (bridging %s)", bridgeSvc.Topic())
-	if err := r.Run(":8080"); err != nil {
+	log.Printf("Starting dblocker server on :%s (bridging %s)", appPort, bridgeSvc.Topic())
+	if err := r.Run(":" + appPort); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+
+	return fallback
 }

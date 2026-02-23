@@ -3,19 +3,20 @@ package database
 import (
 	"dblocker_control/internal/models"
 	"fmt"
+	"os"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func NewPostgresDB() (*gorm.DB, error) {
-	host := "127.0.0.1"
-	user := "scm"
-	password := "sdfKLJ0)imip"
-	port := "5432"
-	sslmode := "disable"
-	dbname := "dblocker-db"
-	timezone := "UTC"
+	host := getEnv("DB_HOST", "127.0.0.1")
+	user := getEnv("DB_USER", "scm")
+	password := getEnv("DB_PASSWORD", "sdfKLJ0)imip")
+	port := getEnv("DB_PORT", "5432")
+	sslmode := getEnv("DB_SSLMODE", "disable")
+	dbname := getEnv("DB_NAME", "dblocker-db")
+	timezone := getEnv("DB_TIMEZONE", "UTC")
 
 	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=%s", host, user, password, dbname, port, sslmode, timezone)
 
@@ -31,4 +32,12 @@ func NewPostgresDB() (*gorm.DB, error) {
 
 	fmt.Println("Connected to Postgres successfully!")
 	return db, nil
+}
+
+func getEnv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+
+	return fallback
 }
