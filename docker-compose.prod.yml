@@ -1,0 +1,29 @@
+services:
+  app:
+    restart: always
+    environment:
+      APP_PORT: ${APP_PORT:-8080}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      DB_TIMEZONE: ${DB_TIMEZONE:-UTC}
+      GIN_MODE: release
+
+  mosquitto:
+    restart: always
+    ports:
+      - "${MQTT_PUBLIC_PORT:-1883}:1883"
+
+  postgres:
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports: []
