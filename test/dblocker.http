@@ -60,7 +60,7 @@ PUT http://localhost:8080/api/dblockers/config
 Content-Type: application/json
 
 {
-    "id": 1,
+    "id": 4,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
