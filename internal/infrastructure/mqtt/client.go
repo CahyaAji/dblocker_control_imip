@@ -30,14 +30,16 @@ type mqttClient struct {
 }
 
 func New(broker string, clientID string) (Client, error) {
+	return NewWithAuth(broker, clientID, os.Getenv("MQTT_USERNAME"), os.Getenv("MQTT_PASSWORD"))
+}
+
+func NewWithAuth(broker string, clientID string, username string, password string) (Client, error) {
 	opts := paho.NewClientOptions()
 	opts.AddBroker(broker)
 	opts.SetClientID(clientID)
 	opts.SetKeepAlive(60 * time.Second)
 	opts.SetAutoReconnect(true)
 
-	username := os.Getenv("MQTT_USERNAME")
-	password := os.Getenv("MQTT_PASSWORD")
 	if username != "" {
 		opts.SetUsername(username)
 		opts.SetPassword(password)

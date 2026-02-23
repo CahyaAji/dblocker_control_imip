@@ -45,12 +45,16 @@ func decodeDBlockerMask(mask uint16) string {
 func main() {
 	// 1. Configuration
 	broker := "tcp://localhost:1883"
+	username := "DBL0KER"
+	password := "4;1Yf,)`"
 	topic := "#"
 	clientID := "fedora-laptop-client"
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(broker)
 	opts.SetClientID(clientID)
+	opts.SetUsername(username)
+	opts.SetPassword(password)
 
 	// 2. Define the Message Handler
 	var messageHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
