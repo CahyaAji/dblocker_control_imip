@@ -39,12 +39,20 @@ Content-Type: application/json
     "latitude": -7.786959801210232,
     "longitude": 110.4220920495705,
     "desc": "Drone blocker di barat",
-    "angle_start": 0
+    "angle_start": 0,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": true}
+    ]
 }
 
 
 ### 5. Delete DBlocker by ID
-DELETE http://localhost:8080/api/dblockers/1
+DELETE http://localhost:8080/api/dblockers/3
 
 
 ### 6. Update DBlocker Config
