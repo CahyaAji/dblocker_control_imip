@@ -1,5 +1,6 @@
 services:
   mosquitto:
+    container_name: dblocker-mqtt
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
@@ -10,6 +11,7 @@ services:
       - ./mosquitto/log:/mosquitto/log
 
   postgres:
+    container_name: dblocker-postgres
     image: postgres:17
     restart: unless-stopped
     environment:
