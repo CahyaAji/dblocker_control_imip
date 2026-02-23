@@ -12,6 +12,13 @@ up: Tells Docker to read the YML file, set up the network, and start all the con
 
 -d: Stands for "detached mode." This runs the containers in the background so you get your terminal prompt back immediately.
 
+
+### 2. Update
+```
+docker compose up -d --remove-orphans
+```
+
+
 ```
 cmd/
   server/
