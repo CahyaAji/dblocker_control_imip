@@ -2,6 +2,7 @@ package main
 
 import (
 	handlerhttp "dblocker_control/internal/handler/http"
+	"dblocker_control/internal/infrastructure/database"
 	"dblocker_control/internal/infrastructure/mqtt"
 	"dblocker_control/internal/route"
 	"dblocker_control/internal/service"
@@ -12,6 +13,12 @@ import (
 )
 
 func main() {
+	db, err := database.NewPostgresDB()
+	if err != nil {
+		log.Fatalf("Failed to connect to database: %v", err)
+	}
+	_ = db // Currently not used, but can be passed to services if needed
+
 	mqttBroker := "tcp://127.0.0.1:1883"
 	topic := "test/coba"
 
