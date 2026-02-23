@@ -19,7 +19,9 @@ docker compose up -d --remove-orphans
 ```
 
 ### 3. Production deployment
-Use the full guide in [DEPLOYMENT.md](DEPLOYMENT.md).
+Use the full guide in [doc/DEPLOYMENT.md](doc/DEPLOYMENT.md).
+For app-only update commands, see [doc/UPDATE_APP.md](doc/UPDATE_APP.md).
+For local laptop development workflow, see [doc/DEVELOPMENT.md](doc/DEVELOPMENT.md).
 
 Production start command:
 ```
