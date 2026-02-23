@@ -28,6 +28,11 @@ func (h *DBlockerHandler) CreateDBlocker(c *gin.Context) {
 		return
 	}
 
+	// If no config provided, initialize 6 sectors with defaults (all false).
+	if len(input.Config) == 0 {
+		input.Config = make([]models.DBlockerConfig, 6)
+	}
+
 	if err := h.Repo.Create(&input); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
