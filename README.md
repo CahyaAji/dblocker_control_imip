@@ -18,6 +18,14 @@ up: Tells Docker to read the YML file, set up the network, and start all the con
 docker compose up -d --remove-orphans
 ```
 
+### 3. Production deployment
+Use the full guide in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Production start command:
+```
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
 
 ```
 cmd/
