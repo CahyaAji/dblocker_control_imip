@@ -1,10 +1,10 @@
 <script>
-    // import DBlockersList from "./DBlockersList.svelte";
+    import DBlockersList from "./DBlockersList.svelte";
 
-    // let activeTab = $state("dblocker");
+    let activeTab = $state("dblocker");
 </script>
 
-<!-- <div class="container">
+<div class="container">
     <div class="tabs">
         <button
             class:active={activeTab === "dblocker"}
@@ -32,10 +32,6 @@
             Content for Tab 3
         </div>
     {/if}
-</div> -->
-
-<div>
-    SIDE MENU
 </div>
 
 <style>
