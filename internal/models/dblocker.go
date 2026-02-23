@@ -18,6 +18,6 @@ type DBlocker struct {
 }
 
 type DBlockerConfigUpdate struct {
-	ID     uint             `json:"id" binding:"required"`
-	Config []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config" required:"true"`
+	ID     uint              `json:"id" binding:"required"`
+	Config [6]DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config"`
 }

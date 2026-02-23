@@ -118,7 +118,7 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 		return
 	}
 
-	if err := h.Repo.UpdateConfig(input.ID, input.Config); err != nil {
+	if err := h.Repo.UpdateConfig(input.ID, input.Config[:]); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -128,7 +128,7 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 	// payload, err := json.Marshal(input.Config)
 
 	bitmaskPayload, err := service.DBlockerConfigToBitmask(
-		input.Config,
+		input.Config[:],
 		true,
 		true,
 	)
