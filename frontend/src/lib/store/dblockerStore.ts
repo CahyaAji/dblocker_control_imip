@@ -27,7 +27,7 @@ let pollingInterval: ReturnType<typeof setInterval> | undefined;
 // --- READ DATA (GET) ---
 export async function fetchDBlockers() {
     try {
-        const res = await fetch(`${API_BASE}/dblockers`);
+        const res = await fetch(`${API_BASE}/api/dblockers`);
         if (!res.ok) throw new Error("Fetch dblockers failed");
         
         const json = await res.json();
@@ -84,7 +84,7 @@ export async function switchSignal(
             value: newValue // true or false
         };
 
-        const res = await fetch(`${API_BASE}/dblockers/switch`, {
+        const res = await fetch(`${API_BASE}api/dblockers/switch`, {
             method: 'POST', // or 'PUT'
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

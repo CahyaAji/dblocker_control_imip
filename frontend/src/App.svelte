@@ -6,10 +6,10 @@
 
   let isResizing = $state(false);
 
-  // $effect(() => {
-  //   startPolling(2000);
-  //   return () => stopPolling();
-  // });
+  $effect(() => {
+    startPolling(2000);
+    return () => stopPolling();
+  });
 
   const toggleSidebar = () => {
     $settings.sidebarExpanded = !$settings.sidebarExpanded;
