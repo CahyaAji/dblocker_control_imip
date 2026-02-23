@@ -9,6 +9,8 @@ import (
 
 const (
 	brokerURL = "tcp://localhost:1883"
+	username  = "DBL0KER"
+	password  = "4;1Yf,)`"
 	serialNum = "250001"
 	clientID  = "dblocker-config-publisher"
 )
@@ -57,7 +59,7 @@ func publishDBlockerConfig(flags ...bool) error {
 
 	topic := fmt.Sprintf("dbl/%s/cmd", serialNum)
 
-	client, err := mqtt.New(brokerURL, clientID)
+	client, err := mqtt.NewWithAuth(brokerURL, clientID, username, password)
 	if err != nil {
 		return err
 	}
