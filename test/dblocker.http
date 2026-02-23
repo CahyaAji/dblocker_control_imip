@@ -2,41 +2,25 @@
 POST http://localhost:8080/api/dblockers
 Content-Type: application/json
 
-# {
-#     "name": "Drone Blocker timur",
-#     "serial_numb": "250002",
-#     "ip": "192.168.1.1
-#     "latitude": -7.788432918834558,
-#     "longitude": 110.44306970000933,
-#     "desc": "Drone blocker di timur",
-#     "angle_start": 0,
-#     "config": [
-#         {"signal_ctrl": false, "signal_gps": false},
-#         {"signal_ctrl": false, "signal_gps": false},
-#         {"signal_ctrl": true, "signal_gps": true},
-#         {"signal_ctrl": true, "signal_gps": true},
-#         {"signal_ctrl": true, "signal_gps": true},
-#         {"signal_ctrl": true, "signal_gps": true}
-#     ]
-# }
-
 {
-    "name": "Runway 13 Bandara",
-    "serial_numb": "250001",
-    "ip": "10.88.81.2",
-    "latitude": -7.786959801210232,
-    "longitude": 110.4220920495705,
-    "desc": "Drone blocker di barat",
-    "angle_start": 0,
-    "config": [
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": true, "signal_gps": true}
-    ]
+    "name": "Edu Park IMIP",
+    "serial_numb": "250002",
+    "ip": "10.88.81.3",
+    "latitude": -7.788432918834558,
+    "longitude": 110.44306970000933,
+    "desc": "Drone blocker di edu park",
+    "angle_start": 0
 }
+
+# {
+#     "name": "Runway 13 Bandara",
+#     "serial_numb": "250001",
+#     "ip": "10.88.81.2",
+#     "latitude": -7.786959801210232,
+#     "longitude": 110.4220920495705,
+#     "desc": "Drone blocker di barat",
+#     "angle_start": 0
+# }
 
 ### 2. Get All DBlockers
 GET http://localhost:8080/api/dblockers
@@ -45,42 +29,18 @@ GET http://localhost:8080/api/dblockers
 GET http://localhost:8080/api/dblockers/1
 
 ### 4. Update DBlocker by ID
-PUT http://localhost:8080/api/dblockers/6
+PUT http://localhost:8080/api/dblockers/1
 Content-Type: application/json
 
 {
-    "name": "Drone Blocker timur",
-    "serial_numb": "STM-1001",
-    "latitude": -7.788432918834558,
-    "longitude": 110.44306970000933,
-    "desc": "Drone blocker di timur",
-    "angle_start": 0,
-    "config": [
-        {"signal_ctrl": true, "signal_gps": false},
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": true, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": false},
-        {"signal_ctrl": false, "signal_gps": false},
-        {"signal_ctrl": true, "signal_gps": true}
-    ]
+    "name": "Runway 13 Bandara",
+    "serial_numb": "250001",
+    "ip": "10.88.81.2",
+    "latitude": -7.786959801210232,
+    "longitude": 110.4220920495705,
+    "desc": "Drone blocker di barat",
+    "angle_start": 0
 }
-
-# {
-#     "name": "Drone Blocker Barat",
-#     "serial_numb": "SCM-1002",
-#     "latitude": -7.7869597,
-#     "longitude": 110.4220920495705,
-#     "desc": "Drone blocker di barat",
-#     "angle_start": 0,
-#     "config": [
-#         {"signal_ctrl": false, "signal_gps": false},
-#         {"signal_ctrl": false, "signal_gps": false},
-#         {"signal_ctrl": true, "signal_gps": true},
-#         {"signal_ctrl": true, "signal_gps": true},
-#         {"signal_ctrl": true, "signal_gps": true},
-#         {"signal_ctrl": true, "signal_gps": false}
-#     ]
-# }
 
 
 ### 5. Delete DBlocker by ID
@@ -92,7 +52,7 @@ PUT http://localhost:8080/api/dblockers/config
 Content-Type: application/json
 
 {
-    "id": 7,
+    "id": 1,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
