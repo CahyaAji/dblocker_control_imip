@@ -3,14 +3,24 @@ POST http://localhost:8080/api/dblockers
 Content-Type: application/json
 
 {
-    "name": "Edu Park IMIP",
-    "serial_numb": "250002",
-    "ip": "10.88.81.3",
-    "latitude": -7.788432918834558,
-    "longitude": 110.44306970000933,
-    "desc": "Drone blocker di edu park",
+    "name": "SCM TEST",
+    "serial_numb": "250000",
+    "ip": "10.88.81.100",
+    "latitude": -7.786959801210232,
+    "longitude": 110.4220920495705,
+    "desc": "Drone blocker di SCM",
     "angle_start": 0
 }
+
+# {
+#     "name": "Edu Park IMIP",
+#     "serial_numb": "250002",
+#     "ip": "10.88.81.3",
+#     "latitude": -7.788432918834558,
+#     "longitude": 110.44306970000933,
+#     "desc": "Drone blocker di edu park",
+#     "angle_start": 0
+# }
 
 # {
 #     "name": "Runway 13 Bandara",
@@ -52,7 +62,7 @@ Content-Type: application/json
 
 
 ### 5. Delete DBlocker by ID
-DELETE http://localhost:8080/api/dblockers/3
+DELETE http://localhost:8080/api/dblockers/1
 
 
 ### 6. Update DBlocker Config
