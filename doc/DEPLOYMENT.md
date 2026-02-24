@@ -84,6 +84,9 @@ docker run --rm -v "$PWD/mosquitto/config:/mosquitto/config" alpine \
 
 ### 5) Start in production mode
 
+This project supports both ARM (for example Raspberry Pi) and AMD64 hosts.
+The Dockerfile builds the Go binary for the host architecture automatically.
+
 ```bash
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
@@ -126,3 +129,47 @@ Persisted data locations:
 - Mosquitto config + password file: `mosquitto/config`
 
 Back up these regularly.
+
+### 9) Quick troubleshooting
+
+1. App keeps restarting with `exec format error`
+
+- Cause: old image was built for a different CPU architecture.
+- Fix:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml down
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml build --no-cache --pull app
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker image inspect dblocker_control_imip-app:latest --format '{{.Architecture}}/{{.Os}}'
+```
+
+2. App log shows `mqtt connect error: not Authorized`
+
+- Cause: `MQTT_USERNAME` / `MQTT_PASSWORD` in `.env.prod` do not match `mosquitto/config/passwordfile`.
+- Fix (regenerate passwordfile using the same values from `.env.prod`):
+
+```bash
+docker run --rm -u 0 -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
+  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD_FROM_ENV"
+docker run --rm -u 0 -v "$PWD/mosquitto/config:/mosquitto/config" alpine \
+  sh -c "chown 1883:1883 /mosquitto/config/passwordfile && chmod 700 /mosquitto/config/passwordfile"
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml restart mosquitto app
+```
+
+3. Cannot open `http://SERVER_IP:8080/dashboard`
+
+- Check app status and logs:
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
+```
+
+- Test locally on server first:
+
+```bash
+curl -i http://127.0.0.1:8080/dashboard
+```
+
+- If local works but remote fails, check firewall/routing (for example `ufw allow 8080/tcp`).
