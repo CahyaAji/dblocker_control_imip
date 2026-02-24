@@ -4,7 +4,7 @@ services:
     environment:
       APP_PORT: ${APP_PORT:-8080}
       MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
-      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: ${DB_PORT:-5432}
