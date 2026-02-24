@@ -84,7 +84,7 @@ export async function switchSignal(
             value: newValue // true or false
         };
 
-        const res = await fetch(`${API_BASE}api/dblockers/switch`, {
+        const res = await fetch(`${API_BASE}/api/dblockers/switch`, {
             method: 'POST', // or 'PUT'
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

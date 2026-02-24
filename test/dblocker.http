@@ -1,5 +1,5 @@
 ### 1. Register DBlocker
-POST http://localhost:8080/api/dblockers
+POST http://10.88.81.16:8080/api/dblockers
 Content-Type: application/json
 
 {
@@ -33,7 +33,7 @@ Content-Type: application/json
 # }
 
 ### 2. Get All DBlockers
-GET http://localhost:8080/api/dblockers
+GET http://10.88.81.16:8080/api/dblockers
 
 ### 3. Get DBlocker by ID
 GET http://localhost:8080/api/dblockers/1
