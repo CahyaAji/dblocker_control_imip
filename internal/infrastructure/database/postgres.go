@@ -12,7 +12,7 @@ import (
 func NewPostgresDB() (*gorm.DB, error) {
 	host := getEnv("DB_HOST", "127.0.0.1")
 	user := getEnv("DB_USER", "scm")
-	password := getEnv("DB_PASSWORD", "sdfKLJ0)imip")
+	password := getEnv("DB_PASSWORD", "mysecretpassword")
 	port := getEnv("DB_PORT", "5432")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 	dbname := getEnv("DB_NAME", "dblocker-db")

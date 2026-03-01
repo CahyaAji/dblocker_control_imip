@@ -16,7 +16,7 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_USER: scm
-      DB_PASSWORD: sdfKLJ0)imip
+      DB_PASSWORD: mysecretpassword
       DB_NAME: dblocker-db
       DB_SSLMODE: disable
       DB_TIMEZONE: UTC
@@ -40,7 +40,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: scm
-      POSTGRES_PASSWORD: sdfKLJ0)imip
+      POSTGRES_PASSWORD: mysecretpassword
       POSTGRES_DB: dblocker-db
     ports:
       - "5432:5432"
