@@ -2,25 +2,25 @@
 POST http://10.88.81.16:8080/api/dblockers
 Content-Type: application/json
 
-{
-    "name": "SCM TEST",
-    "serial_numb": "250000",
-    "ip": "10.88.81.100",
-    "latitude": -7.786959801210232,
-    "longitude": 110.4220920495705,
-    "desc": "Drone blocker di SCM",
-    "angle_start": 0
-}
-
 # {
-#     "name": "Edu Park IMIP",
-#     "serial_numb": "250002",
-#     "ip": "10.88.81.3",
-#     "latitude": -7.788432918834558,
-#     "longitude": 110.44306970000933,
-#     "desc": "Drone blocker di edu park",
+#     "name": "SCM TEST",
+#     "serial_numb": "250000",
+#     "ip": "10.88.81.100",
+#     "latitude": -7.786959801210232,
+#     "longitude": 110.4220920495705,
+#     "desc": "Drone blocker di SCM",
 #     "angle_start": 0
 # }
+
+{
+    "name": "Edu Park IMIP",
+    "serial_numb": "250002",
+    "ip": "10.88.81.3",
+    "latitude": -7.788432918834558,
+    "longitude": 110.44306970000933,
+    "desc": "Drone blocker di edu park",
+    "angle_start": 0
+}
 
 # {
 #     "name": "Runway 13 Bandara",
@@ -33,7 +33,7 @@ Content-Type: application/json
 # }
 
 ### 2. Get All DBlockers
-GET http://10.88.81.16:8080/api/dblockers
+GET http://192.168.100.209:8080/api/dblockers
 
 ### 3. Get DBlocker by ID
 GET http://localhost:8080/api/dblockers/1
@@ -80,3 +80,6 @@ Content-Type: application/json
         {"signal_ctrl": false, "signal_gps": true}
     ]
 }
+
+### 7. Turn Off All DBlocker Config
+PUT http://192.168.100.209:8080/api/dblockers/config/off/4

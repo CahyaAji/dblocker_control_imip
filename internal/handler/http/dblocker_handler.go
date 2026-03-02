@@ -130,8 +130,6 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 
 	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
 
-	// payload, err := json.Marshal(input.Config)
-
 	bitmaskPayload, err := service.DBlockerConfigToBitmask(
 		input.Config[:],
 		true,
@@ -155,4 +153,68 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": input})
+}
+
+func (h *DBlockerHandler) TurnOffAllDBlockerConfig(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	dblocker, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	// Create config with all values set to false (turned off)
+	allOffConfig := [6]models.DBlockerConfig{
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+	}
+
+	if err := h.Repo.UpdateConfig(uint(id), allOffConfig[:]); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
+
+	bitmaskPayload, err := service.DBlockerConfigToBitmask(
+		allOffConfig[:],
+		false,
+		false,
+	)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	payload := []byte{
+		byte(bitmaskPayload >> 8),
+		byte(bitmaskPayload),
+	}
+
+	if err := h.MqttClient.Publish(topic, 1, true, payload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish to mqtt"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "All DBlocker config turned off successfully",
+		"data": gin.H{
+			"id":     uint(id),
+			"config": allOffConfig,
+		},
+	})
 }
