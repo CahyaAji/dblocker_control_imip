@@ -139,7 +139,7 @@ void handleSlaveData(char* rxBuf) {
 
 void publishData() {
   if (isSystemSleeping) {
-      mqttClient.publish(topic_sta, "SLEEPING");
+      mqttClient.publish(topic_sta, "SLEEP", true);
       return; 
   }
   
@@ -172,7 +172,7 @@ void goToSleep() {
   isSystemSleeping = true;
   for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW); 
   syncSlave(); 
-  mqttClient.publish(topic_sta, "SLEEPING");
+  mqttClient.publish(topic_sta, "SLEEP", true);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -186,7 +186,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
   if (strncmp(msgBuffer, "WAKE_RST", 8) == 0) {
-    mqttClient.publish(topic_sta, "GLOBAL RESET...");
+    mqttClient.publish(topic_sta, "OFFLINE", true);
     sendToSlave("$RESET|\r\n");
     delay(500); 
     NVIC_SystemReset(); 
@@ -263,7 +263,7 @@ void loop() {
           
           if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
             mqttClient.subscribe(topic_sub);
-            mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEPING" : "ONLINE", true);
+            mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
             lastConnectionTime = now;
             syncSlave();
           }
