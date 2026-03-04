@@ -1,5 +1,5 @@
 ### 1. Register DBlocker
-POST http://192.168.100.209:8080/api/dblockers
+POST http://192.168.1.174:8080/api/dblockers
 Content-Type: application/json
 
 # {
@@ -13,12 +13,12 @@ Content-Type: application/json
 # }
 
 {
-    "name": "Edu Park IMIP",
-    "serial_numb": "250002",
-    "ip": "10.88.81.3",
-    "latitude": -7.788432918834558,
-    "longitude": 110.44306970000933,
-    "desc": "Drone blocker di edu park",
+    "name": "06 Runway 31 bandara",
+    "serial_numb": "250006",
+    "ip": "10.88.81.7",
+    "latitude": -7.786959801210232,
+    "longitude": 110.4220920495705,
+    "desc": "Drone blocker di bandara",
     "angle_start": 0
 }
 
@@ -33,7 +33,7 @@ Content-Type: application/json
 # }
 
 ### 2. Get All DBlockers
-GET http://192.168.100.209:8080/api/dblockers
+GET http://192.168.1.174:8080/api/dblockers
 
 ### 3. Get DBlocker by ID
 GET http://localhost:8080/api/dblockers/1
@@ -62,7 +62,7 @@ Content-Type: application/json
 
 
 ### 5. Delete DBlocker by ID
-DELETE http://localhost:8080/api/dblockers/1
+DELETE http://10.88.81.16:8080/api/dblockers/2
 
 
 ### 6. Update DBlocker Config
@@ -82,7 +82,7 @@ Content-Type: application/json
 }
 
 ### 7. Turn Off All DBlocker Config
-GET http://192.168.100.209:8080/api/dblockers/config/off/2
+GET http://192.168.1.174:8080/api/dblockers/config/off/3
 
 ### 7. Turn Off All DBlocker Config B
-GET http://10.88.81.16:8080/api/dblockers/config/off/2
+GET http://10.88.81.16:8080/api/dblockers/config/off/3
