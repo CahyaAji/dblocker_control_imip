@@ -5,9 +5,10 @@
 #include <max6675.h>
 #include <IWatchdog.h> 
 
-// --- CONFIG ---
+// Config ========================
 const bool USE_RS485 = false; 
-const unsigned long REBOOT_TIMEOUT = 30000;
+const unsigned long SAFETY_SHUTDOWN_TIMEOUT = 30000;  // Turn off outputs after 30s
+const unsigned long REBOOT_TIMEOUT = 300000;          // Reboot after 5 minutes
 
 #define LED_PIN PC13
 #define CMD_PIN PA11 
@@ -28,7 +29,6 @@ const unsigned long REBOOT_TIMEOUT = 30000;
 HardwareSerial SlaveSerial(PA10, PA9); 
 
 uint32_t outPins[7] = { PB8, PB7, PB6, PA12, PB12, PB10, PB9 };
-// uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
 uint32_t hallSensorPins[9] = { PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PB0 };
 
 MAX6675 temp1(MAX_SCK, MAX_CS_1, MAX_MISO);
@@ -65,12 +65,12 @@ unsigned long lastHeartbeat = 0;
 unsigned long lastConnectionTime = 0;
 
 bool slaveConnected = false;
-bool isSystemSleeping = false; 
+bool isSystemSleeping = false;
+bool safetyShutdownActive = false; 
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
 
-// Config ========================
 void generateIds() {
   snprintf(serial_numb, sizeof(serial_numb), "%s", controller_id);
   snprintf(topic_sub, sizeof(topic_sub), "dbl/%s/cmd", serial_numb);
@@ -174,7 +174,6 @@ void publishData() {
   int offset = 0;
   
   for (int i = 0; i < 18; i++) {
-    // Append each number safely; safeguard against overflow
     int written = snprintf(msg + offset, sizeof(msg) - offset, "%d,", allHallSensors[i]);
     if (written < 0 || offset + written >= sizeof(msg)) {
       msg[offset] = '\0';
@@ -182,12 +181,11 @@ void publishData() {
     }
     offset += written;
   }
-  // Append tail
+
   int tail = snprintf(msg + offset, sizeof(msg) - offset, "%d,%d|%d", t1i, t2i, slaveConnected ? 1 : 0);
   if (tail <= 0) msg[offset] = '\0';
 
   if (!mqttClient.publish(topic_pub, msg)) {
-    // Publish failed - log or retry logic here if needed
   }
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 }
@@ -197,6 +195,14 @@ void goToSleep() {
   for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW); 
   syncSlave(); 
   mqttClient.publish(topic_sta, "SLEEP", true);
+}
+
+void safetyShutdown() {
+  if (safetyShutdownActive) return;
+  
+  safetyShutdownActive = true;
+  for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW);
+  sendCommandWithCrc("SLEEP");
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -222,6 +228,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     for (int i = 0; i < 7; i++) digitalWrite(outPins[i], (mask & (1 << i)) ? HIGH : LOW);
     for (int i = 0; i < 7; i++) lastSlaveState[i] = (mask & (1 << (i + 7)));
     syncSlave();
+    safetyShutdownActive = false;
   }
 }
 
@@ -259,7 +266,6 @@ void setup() {
   
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     while (true) {
-      // Rapid blink means HARDWARE ERROR (W5500 dead/unplugged)
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));
       delay(50); 
       IWatchdog.reload();
@@ -288,7 +294,6 @@ void loop() {
         if (now - lastMqttRetry > 5000) {
           lastMqttRetry = now;
           
-          // SAFETY: Reload Watchdog BEFORE and AFTER blocking network call
           IWatchdog.reload(); 
           
           if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
@@ -296,6 +301,7 @@ void loop() {
             mqttClient.subscribe(topic_sub);
             mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
             lastConnectionTime = now;
+            // Note: NOT clearing safetyShutdownActive - let MQTT callback do it
             syncSlave();
           }
           IWatchdog.reload();
@@ -304,15 +310,14 @@ void loop() {
        lastMqttRetry = now;
     }
     
-    // REBOOT STRATEGY
+    // SAFETY SHUTDOWN: Turn off outputs after 30s
+    if (now - lastConnectionTime > SAFETY_SHUTDOWN_TIMEOUT && !safetyShutdownActive) {
+        safetyShutdown();
+    }
+    
+    // REBOOT STRATEGY: Last resort recovery after 5 minutes
     if (now - lastConnectionTime > REBOOT_TIMEOUT) {
-        // Reset W5500 Hardware first
         IWatchdog.reload();
-        digitalWrite(W5500_RST, LOW); delay(10); 
-        IWatchdog.reload();
-        digitalWrite(W5500_RST, HIGH); delay(100);
-        IWatchdog.reload();
-        // Then Reboot System
         NVIC_SystemReset();
     }
   } else {
@@ -338,17 +343,16 @@ void loop() {
     }
     else if (c == '\n' || c == '\r') {
       if (rxIdx > 0 && rxIdx < 128) {
-        rxBuf[rxIdx] = 0;  // Safe: rxIdx max is 127, so index 127 gets terminated
+        rxBuf[rxIdx] = 0;
         handleSlaveData(rxBuf);
       }
       rxIdx = 0;
     } 
-    else if (rxIdx < 127) {  // Reserve last byte for null terminator
+    else if (rxIdx < 127) {
       rxBuf[rxIdx++] = c;
     } else {
-      // Buffer overflow protection: reset if line too long
       rxIdx = 0;
     }
   }
-  IWatchdog.reload();  // Reload after serial processing
+  IWatchdog.reload();
 }

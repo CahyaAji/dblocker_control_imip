@@ -1,7 +1,7 @@
 // SLAVE (STM32F401CCU6)
 #include <IWatchdog.h>
 
-// --- CONFIGURATION ---
+// Config ========================
 const bool USE_RS485 = false; 
 
 #define LED_PIN PC13
@@ -99,8 +99,6 @@ void processCommand(char* cmd) {
     return;
   }
 
-  // OPTIMIZED: Replaced heavy sscanf with lightweight parsing
-  // Command format: "SET:1,0,1,0,1,0,1"
   if (strncmp(cmd, "SET:", 4) == 0) {
     uint8_t parsedVals[7];
     if (parseSetCommand(cmd + 4, parsedVals)) {
@@ -135,7 +133,6 @@ void verifyAndExecute(char* buf) {
 }
 
 void setup(){
-  // Power-on stability delay
   delay(100); 
   
   analogReadResolution(10); 
@@ -153,7 +150,6 @@ void setup(){
   IWatchdog.begin(10000000); 
   lastValidPacket = millis(); 
 
-  // Initial Sync Request
   if (USE_RS485) { digitalWrite(CMD_PIN, HIGH); delay(2); }
   CmdSerial.println("REQ:SYNC");
   CmdSerial.flush();
