@@ -23,11 +23,30 @@ uint8_t crc8(const char* data) {
   return crc;
 }
 
+bool isHexChar(char c) {
+  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+}
+
+bool parseSetCommand(const char* ptr, uint8_t outVals[7]) {
+  for (int i = 0; i < 7; i++) {
+    if (ptr[0] != '0' && ptr[0] != '1') return false;
+    outVals[i] = (ptr[0] == '1') ? 1 : 0;
+    ptr++;
+
+    if (i < 6) {
+      if (*ptr != ',') return false;
+      ptr++;
+    }
+  }
+  return *ptr == '\0';
+}
+
 void replyToMaster() {
   // Stability: Double read to settle ADC
   for(int i=0; i<9; i++) {
      analogRead(hallSensorPins[i]); 
      allHallSensors[i] = analogRead(hallSensorPins[i]);
+    IWatchdog.reload();
   }
 
   if (USE_RS485) {
@@ -60,20 +79,22 @@ void failsafeShutdown() {
 void processCommand(char* cmd) {
   lastValidPacket = millis();
 
-  if (strstr(cmd, "SLEEP")) {
+  if (strcmp(cmd, "SLEEP") == 0) {
     isSleeping = true;
     for(int i=0; i<7; i++) digitalWrite(outPins[i], LOW);
     return;
   }
 
-  if (strstr(cmd, "WAKE")) {
+  if (strcmp(cmd, "WAKE") == 0) {
     isSleeping = false;
     replyToMaster();
     return;
   }
 
-  if (strstr(cmd, "RESET")) {
+  if (strcmp(cmd, "RESET") == 0) {
+    IWatchdog.reload();
     delay(100);
+    IWatchdog.reload();
     NVIC_SystemReset();
     return;
   }
@@ -81,24 +102,18 @@ void processCommand(char* cmd) {
   // OPTIMIZED: Replaced heavy sscanf with lightweight parsing
   // Command format: "SET:1,0,1,0,1,0,1"
   if (strncmp(cmd, "SET:", 4) == 0) {
-    char* ptr = cmd + 4; // Skip "SET:"
-    isSleeping = false;
-    
-    for(int i=0; i<7; i++) {
-       if (*ptr == '\0') break; // Safety
-       
-       // Parse single digit (0 or 1)
-       int val = (*ptr == '1') ? 1 : 0;
-       digitalWrite(outPins[i], val ? HIGH : LOW);
-       
-       // Move to next number (skip current char and comma)
-       ptr++; 
-       if (*ptr == ',') ptr++;
+    uint8_t parsedVals[7];
+    if (parseSetCommand(cmd + 4, parsedVals)) {
+      isSleeping = false;
+      for (int i = 0; i < 7; i++) {
+        digitalWrite(outPins[i], parsedVals[i] ? HIGH : LOW);
+      }
+      replyToMaster();
     }
-    replyToMaster();
+    return;
   }
 
-  if (strstr(cmd, "REQ")) {
+  if (strncmp(cmd, "REQ", 3) == 0) {
       replyToMaster();
   }
 }
@@ -110,6 +125,9 @@ void verifyAndExecute(char* buf) {
     *pipePtr = 0; 
     char* payload = buf;
     char* crcHex = pipePtr + 1; 
+
+    if (strlen(crcHex) != 2) return;
+    if (!isHexChar(crcHex[0]) || !isHexChar(crcHex[1])) return;
 
     if (crc8(payload) == (uint8_t) strtol(crcHex, NULL, 16)) {
         processCommand(payload);
@@ -147,8 +165,10 @@ void loop(){
 
   static char rxBuf[64];
   static int rxIdx = 0;
+  int rxCount = 0;
 
-  while (CmdSerial.available()) {
+  while (CmdSerial.available() && rxCount < 50) {
+    rxCount++;
     char c = CmdSerial.read();
     if (c == '$') { rxIdx = 0; digitalWrite(LED_PIN, LOW); } 
     else if (c == '\r' || c == '\n') {
@@ -160,7 +180,10 @@ void loop(){
       digitalWrite(LED_PIN, HIGH); 
     } 
     else if (rxIdx < 63) { rxBuf[rxIdx++] = c; }
+    else { rxIdx = 0; }
   }
+
+  IWatchdog.reload();
 
   if (millis() - lastValidPacket > TIMEOUT_MS) {
       failsafeShutdown();

@@ -7,7 +7,7 @@
 
 // --- CONFIG ---
 const bool USE_RS485 = false; 
-const unsigned long REBOOT_TIMEOUT = 30000; // 30s is safer than 60s for static IP
+const unsigned long REBOOT_TIMEOUT = 30000;
 
 #define LED_PIN PC13
 #define CMD_PIN PA11 
@@ -35,8 +35,13 @@ MAX6675 temp1(MAX_SCK, MAX_CS_1, MAX_MISO);
 MAX6675 temp2(MAX_SCK, MAX_CS_2, MAX_MISO);
 
 // Config ========================
+// EDIT PER CONTROLLER ========================
+// Keep these values unique per device when flashing.
+const char controller_id[] = "250006";
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x06 };
 IPAddress ip(10, 88, 81, 7);
+// ===========================================
+
 IPAddress gateway(10, 88, 81, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress myDns(8, 8, 8, 8);
@@ -51,7 +56,6 @@ char topic_pub[64];
 char topic_sta[64];
 
 int allHallSensors[18]; 
-float temperatures[2];
 bool lastSlaveState[7] = { 0 }; 
 
 unsigned long lastMqttRetry = 0;
@@ -68,10 +72,14 @@ PubSubClient mqttClient(ethClient);
 
 // Config ========================
 void generateIds() {
-  snprintf(serial_numb, sizeof(serial_numb), "250006");
+  snprintf(serial_numb, sizeof(serial_numb), "%s", controller_id);
   snprintf(topic_sub, sizeof(topic_sub), "dbl/%s/cmd", serial_numb);
   snprintf(topic_pub, sizeof(topic_pub), "dbl/%s/rpt", serial_numb);
   snprintf(topic_sta, sizeof(topic_sta), "dbl/%s/sta", serial_numb);
+}
+
+bool isControllerIdValid() {
+  return strlen(controller_id) > 0 && strlen(controller_id) < sizeof(serial_numb);
 }
 
 uint8_t crc8(const char* data) {
@@ -93,6 +101,14 @@ void sendToSlave(const char* data) {
   }
 }
 
+void sendCommandWithCrc(const char* payload) {
+  uint8_t crc = crc8(payload);
+  char fullPacket[80];
+  snprintf(fullPacket, sizeof(fullPacket), "$%s|%s%X\r\n",
+           payload, (crc < 0x10 ? "0" : ""), crc);
+  sendToSlave(fullPacket);
+}
+
 void syncSlave() {
   char payload[64];
   if (isSystemSleeping) {
@@ -102,13 +118,7 @@ void syncSlave() {
            lastSlaveState[0], lastSlaveState[1], lastSlaveState[2],
            lastSlaveState[3], lastSlaveState[4], lastSlaveState[5], lastSlaveState[6]);
   }
-
-  uint8_t crc = crc8(payload);
-  
-  char fullPacket[80];
-  snprintf(fullPacket, sizeof(fullPacket), "$%s|%s%X\r\n", 
-           payload, (crc < 0x10 ? "0" : ""), crc);
-  sendToSlave(fullPacket);
+  sendCommandWithCrc(payload);
 }
 
 void handleSlaveData(char* rxBuf) {
@@ -128,10 +138,13 @@ void handleSlaveData(char* rxBuf) {
 
     char* ptr = rxBuf + 4;
     for (int i = 9; i < 18; i++) {
-      if (ptr) {
-        allHallSensors[i] = atoi(ptr);
+      if (ptr && *ptr) {
+        int val = atoi(ptr);
+        allHallSensors[i] = val;
         ptr = strchr(ptr, ',');
         if (ptr) ptr++;
+      } else {
+        allHallSensors[i] = 0;
       }
     }
   }
@@ -144,8 +157,11 @@ void publishData() {
   }
   
   for (int i = 0; i < 9; i++) allHallSensors[i] = analogRead(hallSensorPins[i]);
+  IWatchdog.reload();
   float t1 = temp1.readCelsius(); delay(5); 
+  IWatchdog.reload();
   float t2 = temp2.readCelsius();
+  IWatchdog.reload();
   int t1i = isnan(t1) ? -9900 : (int)(t1 * 100);
   int t2i = isnan(t2) ? -9900 : (int)(t2 * 100);
 
@@ -158,13 +174,21 @@ void publishData() {
   int offset = 0;
   
   for (int i = 0; i < 18; i++) {
-    // Append each number safely
-    offset += snprintf(msg + offset, sizeof(msg) - offset, "%d,", allHallSensors[i]);
+    // Append each number safely; safeguard against overflow
+    int written = snprintf(msg + offset, sizeof(msg) - offset, "%d,", allHallSensors[i]);
+    if (written < 0 || offset + written >= sizeof(msg)) {
+      msg[offset] = '\0';
+      break;
+    }
+    offset += written;
   }
   // Append tail
-  snprintf(msg + offset, sizeof(msg) - offset, "%d,%d|%d", t1i, t2i, slaveConnected ? 1 : 0);
+  int tail = snprintf(msg + offset, sizeof(msg) - offset, "%d,%d|%d", t1i, t2i, slaveConnected ? 1 : 0);
+  if (tail <= 0) msg[offset] = '\0';
 
-  mqttClient.publish(topic_pub, msg);
+  if (!mqttClient.publish(topic_pub, msg)) {
+    // Publish failed - log or retry logic here if needed
+  }
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 }
 
@@ -176,24 +200,21 @@ void goToSleep() {
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  char msgBuffer[20];
-  int copyLen = (length < 19) ? length : 19;
-  memcpy(msgBuffer, payload, copyLen);
-  msgBuffer[copyLen] = '\0';
-
-  if (strncmp(msgBuffer, "SLEEP", 5) == 0) {
+  if (length == 5 && memcmp(payload, "SLEEP", 5) == 0) {
     goToSleep();
     return;
   }
-  if (strncmp(msgBuffer, "WAKE_RST", 8) == 0) {
+  if (length == 8 && memcmp(payload, "WAKE_RST", 8) == 0) {
     mqttClient.publish(topic_sta, "OFFLINE", true);
-    sendToSlave("$RESET|\r\n");
+    sendCommandWithCrc("RESET");
+    IWatchdog.reload();
     delay(500); 
+    IWatchdog.reload();
     NVIC_SystemReset(); 
     return;
   }
-  if (strncmp(msgBuffer, "RST_SLAVE", 9) == 0) {
-    sendToSlave("$RESET|\r\n");
+  if (length == 9 && memcmp(payload, "RST_SLAVE", 9) == 0) {
+    sendCommandWithCrc("RESET");
     return;
   }
   if (!isSystemSleeping && length == 2) {
@@ -205,7 +226,7 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 }
 
 void setup() {
-  IWatchdog.begin(20000000); 
+  IWatchdog.begin(20000000);
   analogReadResolution(10);
 
   SlaveSerial.begin(9600); 
@@ -214,7 +235,9 @@ void setup() {
   // Hardware Reset W5500
   pinMode(W5500_RST, OUTPUT); 
   digitalWrite(W5500_RST, LOW); delay(50); 
+  IWatchdog.reload();
   digitalWrite(W5500_RST, HIGH); delay(200);
+  IWatchdog.reload();
   pinMode(LED_PIN, OUTPUT);
 
   for (int i = 0; i < 7; i++) {
@@ -223,6 +246,13 @@ void setup() {
   }
 
   generateIds();
+  if (!isControllerIdValid()) {
+    while (true) {
+      digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+      delay(100);
+      IWatchdog.reload();
+    }
+  }
   SPI.setMOSI(W5500_MOSI); SPI.setMISO(W5500_MISO); SPI.setSCLK(W5500_SCK); SPI.begin();
   Ethernet.init(W5500_CS);
   Ethernet.begin(mac, ip, myDns, gateway, subnet); 
@@ -258,15 +288,17 @@ void loop() {
         if (now - lastMqttRetry > 5000) {
           lastMqttRetry = now;
           
-          // SAFETY: Reload Watchdog BEFORE blocking network call
+          // SAFETY: Reload Watchdog BEFORE and AFTER blocking network call
           IWatchdog.reload(); 
           
           if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
+            IWatchdog.reload();
             mqttClient.subscribe(topic_sub);
             mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
             lastConnectionTime = now;
             syncSlave();
           }
+          IWatchdog.reload();
         }
     } else {
        lastMqttRetry = now;
@@ -275,8 +307,11 @@ void loop() {
     // REBOOT STRATEGY
     if (now - lastConnectionTime > REBOOT_TIMEOUT) {
         // Reset W5500 Hardware first
+        IWatchdog.reload();
         digitalWrite(W5500_RST, LOW); delay(10); 
+        IWatchdog.reload();
         digitalWrite(W5500_RST, HIGH); delay(100);
+        IWatchdog.reload();
         // Then Reboot System
         NVIC_SystemReset();
     }
@@ -294,18 +329,26 @@ void loop() {
 
   static char rxBuf[128];
   static int rxIdx = 0;
-  while (SlaveSerial.available()) {
+  int rxCount = 0;
+  while (SlaveSerial.available() && rxCount < 50) {  // Limit to prevent starving watchdog
+    rxCount++;
     char c = SlaveSerial.read();
-    if (c == '$') rxIdx = 0; 
+    if (c == '$') {
+      rxIdx = 0; 
+    }
     else if (c == '\n' || c == '\r') {
-      if (rxIdx > 0) {
-        rxBuf[rxIdx] = 0;
+      if (rxIdx > 0 && rxIdx < 128) {
+        rxBuf[rxIdx] = 0;  // Safe: rxIdx max is 127, so index 127 gets terminated
         handleSlaveData(rxBuf);
-        rxIdx = 0;
       }
+      rxIdx = 0;
     } 
-    else if (rxIdx < 127) {
+    else if (rxIdx < 127) {  // Reserve last byte for null terminator
       rxBuf[rxIdx++] = c;
+    } else {
+      // Buffer overflow protection: reset if line too long
+      rxIdx = 0;
     }
   }
+  IWatchdog.reload();  // Reload after serial processing
 }
