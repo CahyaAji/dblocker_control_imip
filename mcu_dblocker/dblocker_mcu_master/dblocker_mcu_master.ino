@@ -1,4 +1,4 @@
-// MASTER (STM32F411CEU6) v2.5
+// MASTER (STM32F411CEU6) v2.6
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
@@ -161,25 +161,24 @@ void handleSlaveData(char* buf) {
   
   lastSlaveMessage = millis();
   
-  // Detect reconnection
+  // Mark slave as connected - sync happens via 2-second heartbeat
   if (!slaveConnected) {
     slaveConnected = true;
-    syncSlave();
   }
 
   if (strstr(payload, "REQ:SYNC")) {
-    syncSlave(); 
+    syncSlave();  // Only sync on explicit request
     return;
   }
 
   if (strstr(payload, "STA:SLEEP")) {
-    syncSlave();
+    // Slave is sleeping but master is not - will be synced by heartbeat
     return;
   }
   
   if (strncmp(payload, "CUR:", 4) == 0) {
     if (isSystemSleeping) {
-        syncSlave();
+        // Ignore sensor data when sleeping - heartbeat will sync slave
         return;
     }
 
