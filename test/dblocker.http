@@ -1,5 +1,5 @@
 ### 1. Register DBlocker
-POST http://192.168.1.174:8080/api/dblockers
+POST http://10.88.81.16:8080/api/dblockers
 Content-Type: application/json
 
 # {
@@ -13,11 +13,11 @@ Content-Type: application/json
 # }
 
 {
-    "name": "06 Runway 31 bandara",
-    "serial_numb": "250006",
-    "ip": "10.88.81.7",
-    "latitude": -7.786959801210232,
-    "longitude": 110.4220920495705,
+    "name": "05 Terminal Utara Tsingshan",
+    "serial_numb": "250005",
+    "ip": "10.88.81.6",
+    "latitude": -7.767097914728923,
+    "longitude": 110.43166037380772,
     "desc": "Drone blocker di bandara",
     "angle_start": 0
 }
@@ -33,7 +33,7 @@ Content-Type: application/json
 # }
 
 ### 2. Get All DBlockers
-GET http://192.168.1.174:8080/api/dblockers
+GET http://10.88.81.16:8080/api/dblockers
 
 ### 3. Get DBlocker by ID
 GET http://localhost:8080/api/dblockers/1
@@ -85,4 +85,4 @@ Content-Type: application/json
 GET http://192.168.1.174:8080/api/dblockers/config/off/3
 
 ### 7. Turn Off All DBlocker Config B
-GET http://10.88.81.16:8080/api/dblockers/config/off/3
+GET http://10.88.81.16:8080/api/dblockers/config/off/5
