@@ -54,6 +54,13 @@ docker compose up -d --build
 docker compose logs --tail=100 app mosquitto postgres
 ```
 
+- If you changed `DB_PASSWORD` (or DB user/name), remember Postgres keeps old credentials inside the persisted `pgdata` volume from first initialization. Recreate DB volume for local dev:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
 - If build keeps old cache unexpectedly:
 
 ```bash
@@ -82,4 +89,9 @@ docker compose ps
 
 # tail app logs
 docker compose logs -f --tail=100 app
+```
+
+```bash
+# update app and clean up
+sudo docker compose up -d --build app && sudo docker image prune -f
 ```
