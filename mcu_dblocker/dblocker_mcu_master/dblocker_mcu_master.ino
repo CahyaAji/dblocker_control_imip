@@ -7,7 +7,7 @@
 
 // Config ========================
 const bool USE_RS485 = false; 
-const unsigned long SAFETY_SHUTDOWN_TIMEOUT = 30000;  // Turn off outputs after 30s
+const unsigned long SAFETY_SHUTDOWN_TIMEOUT = 20000;  // Turn off outputs after 20s
 const unsigned long REBOOT_TIMEOUT = 300000;          // Reboot after 5 minutes
 
 #define LED_PIN PC13
@@ -28,7 +28,8 @@ const unsigned long REBOOT_TIMEOUT = 300000;          // Reboot after 5 minutes
 
 HardwareSerial SlaveSerial(PA10, PA9); 
 
-uint32_t outPins[7] = { PB8, PB7, PB6, PA12, PB12, PB10, PB9 };
+uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
+// uint32_t outPins[7] = { PB8, PB7, PB6, PA12, PB12, PB10, PB9 };
 uint32_t hallSensorPins[9] = { PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PB0 };
 
 MAX6675 temp1(MAX_SCK, MAX_CS_1, MAX_MISO);
@@ -37,9 +38,9 @@ MAX6675 temp2(MAX_SCK, MAX_CS_2, MAX_MISO);
 // Config ========================
 // EDIT PER CONTROLLER ========================
 // Keep these values unique per device when flashing.
-const char controller_id[] = "250006";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x06 };
-IPAddress ip(10, 88, 81, 7);
+const char controller_id[] = "250005";
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x05 };
+IPAddress ip(10, 88, 81, 6);
 // ===========================================
 
 IPAddress gateway(10, 88, 81, 1);
@@ -111,7 +112,7 @@ void sendCommandWithCrc(const char* payload) {
 
 void syncSlave() {
   char payload[64];
-  if (isSystemSleeping) {
+  if (isSystemSleeping || safetyShutdownActive) {
      snprintf(payload, sizeof(payload), "SLEEP");
   } else {
      snprintf(payload, sizeof(payload), "SET:%d,%d,%d,%d,%d,%d,%d",

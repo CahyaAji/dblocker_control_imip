@@ -9,7 +9,8 @@ const bool USE_RS485 = false;
 
 HardwareSerial CmdSerial(PA10, PA9); 
 
-uint32_t outPins[7] = { PB8, PB7, PB6, PA8, PB12, PB10, PB9 };
+uint32_t outPins[7] = { PB10, PB12, PA8, PB6, PB7, PB8, PB9 };
+// uint32_t outPins[7] = { PB8, PB7, PB6, PA8, PB12, PB10, PB9 };
 uint32_t hallSensorPins[9] = { PA1, PA2, PA3, PA4, PA5, PA6, PA7, PB0, PB1 };
 int allHallSensors[9];
 
