@@ -1,4 +1,4 @@
-// SLAVE (STM32F401CCU6)
+// SLAVE (STM32F401CCU6) v2.3
 #include <IWatchdog.h>
 
 // Config ========================
@@ -42,7 +42,34 @@ bool parseSetCommand(const char* ptr, uint8_t outVals[7]) {
   return *ptr == '\0';
 }
 
+void sendResponseWithCrc(const char* payload) {
+  uint8_t crc = crc8(payload);
+  char fullPacket[80];
+  snprintf(fullPacket, sizeof(fullPacket), "$%s|%s%X\r\n",
+           payload, (crc < 0x10 ? "0" : ""), crc);
+  CmdSerial.print(fullPacket);
+  CmdSerial.flush();
+}
+
 void replyToMaster() {
+  if (USE_RS485) {
+      delayMicroseconds(500); 
+      digitalWrite(CMD_PIN, HIGH); 
+      delayMicroseconds(50);
+  }
+
+  // If sleeping, reply with status only (no sensor read)
+  if (isSleeping) {
+    sendResponseWithCrc("STA:SLEEP");
+    if (USE_RS485) {
+      // Wait for the last byte to be transmitted.
+      // At 9600 baud, each character takes ~1.04ms.
+      delay(2);
+      digitalWrite(CMD_PIN, LOW);
+    }
+    return;
+  }
+  
   // Stability: Double read to settle ADC
   for(int i=0; i<9; i++) {
      analogRead(hallSensorPins[i]); 
@@ -50,35 +77,30 @@ void replyToMaster() {
     IWatchdog.reload();
   }
 
-  if (USE_RS485) {
-      delayMicroseconds(500); 
-      digitalWrite(CMD_PIN, HIGH); 
-      delayMicroseconds(50);
-  }
-
-  CmdSerial.print("CUR:");
+  static char payload[80];
+  int offset = snprintf(payload, sizeof(payload), "CUR:");
   for(int i=0; i<9; i++) {
-    CmdSerial.print(allHallSensors[i]);
-    if(i < 8) CmdSerial.print(",");
+    offset += snprintf(payload + offset, sizeof(payload) - offset, "%d%s", 
+                       allHallSensors[i], (i < 8) ? "," : "");
   }
-  CmdSerial.println();
-  
-  CmdSerial.flush(); 
+  sendResponseWithCrc(payload);
 
   if (USE_RS485) {
-      delayMicroseconds(500); 
+      // Wait for the last byte to be transmitted.
+      // At 9600 baud, each character takes ~1.04ms.
+      delay(2);
       digitalWrite(CMD_PIN, LOW);
   }
 }
 
 void failsafeShutdown() {
-  if (!isSleeping) {
-     for(int i=0; i<7; i++) digitalWrite(outPins[i], LOW);
-  }
+  // Always turn off outputs and enter sleep mode on timeout
+  isSleeping = true;
+  for(int i=0; i<7; i++) digitalWrite(outPins[i], LOW);
 }
 
 void processCommand(char* cmd) {
-  lastValidPacket = millis();
+  // Note: lastValidPacket already updated in verifyAndExecute after CRC check
 
   if (strcmp(cmd, "SLEEP") == 0) {
     isSleeping = true;
@@ -94,7 +116,15 @@ void processCommand(char* cmd) {
 
   if (strcmp(cmd, "RESET") == 0) {
     IWatchdog.reload();
-    delay(100);
+    digitalWrite(LED_PIN, LOW);
+    delay(50);
+    digitalWrite(LED_PIN, HIGH);
+    delay(50);
+    digitalWrite(LED_PIN, LOW);
+    delay(50);
+    digitalWrite(LED_PIN, HIGH);
+    delay(50);
+    digitalWrite(LED_PIN, LOW);
     IWatchdog.reload();
     NVIC_SystemReset();
     return;
@@ -112,7 +142,7 @@ void processCommand(char* cmd) {
     return;
   }
 
-  if (strncmp(cmd, "REQ", 3) == 0) {
+  if (strcmp(cmd, "REQ") == 0 || strncmp(cmd, "REQ:", 4) == 0) {
       replyToMaster();
   }
 }
@@ -129,6 +159,8 @@ void verifyAndExecute(char* buf) {
     if (!isHexChar(crcHex[0]) || !isHexChar(crcHex[1])) return;
 
     if (crc8(payload) == (uint8_t) strtol(crcHex, NULL, 16)) {
+        // Only reset timeout on valid CRC - prevents garbage from masking comm failure
+        lastValidPacket = millis();
         processCommand(payload);
     }
 }
@@ -151,9 +183,9 @@ void setup(){
   IWatchdog.begin(10000000); 
   lastValidPacket = millis(); 
 
+  // Request sync from master using CRC-protected message
   if (USE_RS485) { digitalWrite(CMD_PIN, HIGH); delay(2); }
-  CmdSerial.println("REQ:SYNC");
-  CmdSerial.flush();
+  sendResponseWithCrc("REQ:SYNC");
   if (USE_RS485) { delayMicroseconds(500); digitalWrite(CMD_PIN, LOW); }
 }
 

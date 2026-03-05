@@ -1,14 +1,15 @@
-// MASTER (STM32F411CEU6)
+// MASTER (STM32F411CEU6) v2.5
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <max6675.h>
+#include <ctype.h>
 #include <IWatchdog.h> 
 
 // Config ========================
 const bool USE_RS485 = false; 
-const unsigned long SAFETY_SHUTDOWN_TIMEOUT = 20000;  // Turn off outputs after 20s
-const unsigned long REBOOT_TIMEOUT = 300000;          // Reboot after 5 minutes
+const unsigned long SAFETY_SHUTDOWN_TIMEOUT = 20000;
+const unsigned long REBOOT_TIMEOUT = 300000;
 
 #define LED_PIN PC13
 #define CMD_PIN PA11 
@@ -29,7 +30,6 @@ const unsigned long REBOOT_TIMEOUT = 300000;          // Reboot after 5 minutes
 HardwareSerial SlaveSerial(PA10, PA9); 
 
 uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
-// uint32_t outPins[7] = { PB8, PB7, PB6, PA12, PB12, PB10, PB9 };
 uint32_t hallSensorPins[9] = { PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PB0 };
 
 MAX6675 temp1(MAX_SCK, MAX_CS_1, MAX_MISO);
@@ -37,7 +37,6 @@ MAX6675 temp2(MAX_SCK, MAX_CS_2, MAX_MISO);
 
 // Config ========================
 // EDIT PER CONTROLLER ========================
-// Keep these values unique per device when flashing.
 const char controller_id[] = "250005";
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x05 };
 IPAddress ip(10, 88, 81, 6);
@@ -58,16 +57,23 @@ char topic_sta[64];
 
 int allHallSensors[18]; 
 bool lastSlaveState[7] = { 0 }; 
+bool lastMasterState[7] = { 0 };  // Save master output states for recovery
 
 unsigned long lastMqttRetry = 0;
 unsigned long lastPublish = 0;
 unsigned long lastSlaveMessage = 0;
 unsigned long lastHeartbeat = 0; 
 unsigned long lastConnectionTime = 0;
+unsigned long lastLinkDownTime = 0;
 
 bool slaveConnected = false;
 bool isSystemSleeping = false;
-bool safetyShutdownActive = false; 
+bool safetyShutdownActive = false;
+bool wasLinkUp = true;
+
+// Serial receive state (global for reset on disconnect)
+char rxBuf[128];
+int rxIdx = 0; 
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
@@ -89,6 +95,13 @@ uint8_t crc8(const char* data) {
   return crc;
 }
 
+void flushSerialBuffer() {
+  while (SlaveSerial.available()) {
+    SlaveSerial.read();
+  }
+  rxIdx = 0;
+}
+
 void sendToSlave(const char* data) {
   if (USE_RS485) {
       digitalWrite(CMD_PIN, HIGH); 
@@ -97,7 +110,7 @@ void sendToSlave(const char* data) {
   SlaveSerial.print(data);
   SlaveSerial.flush();
   if (USE_RS485) {
-      delayMicroseconds(500); 
+      delay(2); 
       digitalWrite(CMD_PIN, LOW); 
   }
 }
@@ -122,29 +135,72 @@ void syncSlave() {
   sendCommandWithCrc(payload);
 }
 
-void handleSlaveData(char* rxBuf) {
-  lastSlaveMessage = millis();
-  slaveConnected = true;
+bool validateAndExtractPayload(char* buf, char* payloadOut, size_t maxLen) {
+  char* pipePtr = strchr(buf, '|');
+  if (!pipePtr) return false;
+  
+  *pipePtr = 0;
+  char* crcHex = pipePtr + 1;
+  
+  // Validate CRC hex format (must be 2 hex characters)
+  if (strlen(crcHex) != 2 || !isxdigit(crcHex[0]) || !isxdigit(crcHex[1])) return false;
+  
+  uint8_t receivedCrc = (uint8_t)strtol(crcHex, NULL, 16);
+  if (crc8(buf) != receivedCrc) return false;
+  
+  strncpy(payloadOut, buf, maxLen - 1);
+  payloadOut[maxLen - 1] = '\0';
+  return true;
+}
 
-  if (strstr(rxBuf, "REQ:SYNC")) {
+void handleSlaveData(char* buf) {
+  char payload[64];
+  if (!validateAndExtractPayload(buf, payload, sizeof(payload))) {
+    return;
+  }
+  
+  lastSlaveMessage = millis();
+  
+  // Detect reconnection
+  if (!slaveConnected) {
+    slaveConnected = true;
+    syncSlave();
+  }
+
+  if (strstr(payload, "REQ:SYNC")) {
     syncSlave(); 
     return;
-  } 
+  }
+
+  if (strstr(payload, "STA:SLEEP")) {
+    syncSlave();
+    return;
+  }
   
-  if (strncmp(rxBuf, "CUR:", 4) == 0) {
+  if (strncmp(payload, "CUR:", 4) == 0) {
     if (isSystemSleeping) {
         syncSlave();
         return;
     }
 
-    char* ptr = rxBuf + 4;
-    for (int i = 9; i < 18; i++) {
+    char* ptr = payload + 4;
+    int valuesRead = 0;
+    for (int i = 9; i < 18 && valuesRead < 9; i++) {
       if (ptr && *ptr) {
         int val = atoi(ptr);
+        if (val < 0) val = 0;
+        if (val > 1023) val = 1023;
         allHallSensors[i] = val;
+        valuesRead++;
         ptr = strchr(ptr, ',');
         if (ptr) ptr++;
       } else {
+        allHallSensors[i] = 0;
+      }
+    }
+    
+    if (valuesRead < 9) {
+      for (int i = 9 + valuesRead; i < 18; i++) {
         allHallSensors[i] = 0;
       }
     }
@@ -152,8 +208,7 @@ void handleSlaveData(char* rxBuf) {
 }
 
 void publishData() {
-  if (isSystemSleeping) {
-      mqttClient.publish(topic_sta, "SLEEP", true);
+  if (isSystemSleeping || safetyShutdownActive) {
       return; 
   }
   
@@ -167,7 +222,10 @@ void publishData() {
   int t2i = isnan(t2) ? -9900 : (int)(t2 * 100);
 
   if (millis() - lastSlaveMessage > 10000) {
-    slaveConnected = false;
+    if (slaveConnected) {
+      slaveConnected = false;
+      flushSerialBuffer();  // Clear any garbage data in buffer
+    }
     for (int i = 9; i < 18; i++) allHallSensors[i] = 0;
   }
 
@@ -202,6 +260,7 @@ void safetyShutdown() {
   if (safetyShutdownActive) return;
   
   safetyShutdownActive = true;
+  isSystemSleeping = true;
   for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW);
   sendCommandWithCrc("SLEEP");
 }
@@ -209,6 +268,15 @@ void safetyShutdown() {
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (length == 5 && memcmp(payload, "SLEEP", 5) == 0) {
     goToSleep();
+    return;
+  }
+  if (length == 4 && memcmp(payload, "WAKE", 4) == 0) {
+    isSystemSleeping = false;
+    safetyShutdownActive = false;
+    // Restore master outputs to last known state
+    for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
+    syncSlave();  // Wake up slave and restore its states
+    mqttClient.publish(topic_sta, "ONLINE", true);
     return;
   }
   if (length == 8 && memcmp(payload, "WAKE_RST", 8) == 0) {
@@ -226,7 +294,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
   if (!isSystemSleeping && length == 2) {
     uint16_t mask = ((uint16_t)payload[0] << 8) | payload[1];
-    for (int i = 0; i < 7; i++) digitalWrite(outPins[i], (mask & (1 << i)) ? HIGH : LOW);
+    for (int i = 0; i < 7; i++) {
+      bool state = (mask & (1 << i)) ? HIGH : LOW;
+      digitalWrite(outPins[i], state);
+      lastMasterState[i] = state;  // Save master state for recovery
+    }
     for (int i = 0; i < 7; i++) lastSlaveState[i] = (mask & (1 << (i + 7)));
     syncSlave();
     safetyShutdownActive = false;
@@ -290,8 +362,20 @@ void loop() {
       syncSlave(); 
   }
 
+  bool linkUp = (Ethernet.linkStatus() == LinkON);
+  if (!linkUp && wasLinkUp) {
+    lastLinkDownTime = now;
+  }
+  wasLinkUp = linkUp;
+
+  if (!linkUp && !safetyShutdownActive) {
+    if (now - lastLinkDownTime > SAFETY_SHUTDOWN_TIMEOUT) {
+      safetyShutdown();
+    }
+  }
+
   if (!mqttClient.connected()) {
-    if (Ethernet.linkStatus() == LinkON) {
+    if (linkUp) {
         if (now - lastMqttRetry > 5000) {
           lastMqttRetry = now;
           
@@ -300,10 +384,20 @@ void loop() {
           if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
             IWatchdog.reload();
             mqttClient.subscribe(topic_sub);
-            mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
+            
+            // Auto-recover from safety shutdown when reconnecting
+            if (safetyShutdownActive) {
+              safetyShutdownActive = false;
+              isSystemSleeping = false;
+              // Restore master outputs to last known state
+              for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
+              syncSlave();  // Wake up slave and restore its states
+              mqttClient.publish(topic_sta, "ONLINE", true);
+            } else {
+              mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
+              syncSlave();
+            }
             lastConnectionTime = now;
-            // Note: NOT clearing safetyShutdownActive - let MQTT callback do it
-            syncSlave();
           }
           IWatchdog.reload();
         }
@@ -311,13 +405,22 @@ void loop() {
        lastMqttRetry = now;
     }
     
-    // SAFETY SHUTDOWN: Turn off outputs after 30s
     if (now - lastConnectionTime > SAFETY_SHUTDOWN_TIMEOUT && !safetyShutdownActive) {
         safetyShutdown();
     }
     
-    // REBOOT STRATEGY: Last resort recovery after 5 minutes
     if (now - lastConnectionTime > REBOOT_TIMEOUT) {
+        sendCommandWithCrc("RESET");
+        IWatchdog.reload();
+        digitalWrite(LED_PIN, LOW);
+        delay(50);
+        digitalWrite(LED_PIN, HIGH);
+        delay(50);
+        digitalWrite(LED_PIN, LOW);
+        delay(50);
+        digitalWrite(LED_PIN, HIGH);
+        delay(50);
+        digitalWrite(LED_PIN, LOW);
         IWatchdog.reload();
         NVIC_SystemReset();
     }
@@ -333,10 +436,8 @@ void loop() {
     }
   }
 
-  static char rxBuf[128];
-  static int rxIdx = 0;
   int rxCount = 0;
-  while (SlaveSerial.available() && rxCount < 50) {  // Limit to prevent starving watchdog
+  while (SlaveSerial.available() && rxCount < 50) { 
     rxCount++;
     char c = SlaveSerial.read();
     if (c == '$') {
