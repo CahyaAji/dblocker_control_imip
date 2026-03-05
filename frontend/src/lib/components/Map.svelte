@@ -17,7 +17,7 @@
     let debounceTimer: ReturnType<typeof setTimeout>;
 
     const MAP_STYLES = {
-        normal: "https://api.maptiler.com/maps/openstreetmap/style.json?key=fB2eDjoDg2nlel5Kw6ym",
+        normal: "https://api.maptiler.com/maps/openstreetmap/style.json?key=aUOEn1bA48mz3xc3pL4N",
         hybrid: "https://api.maptiler.com/maps/hybrid/style.json?key=aUOEn1bA48mz3xc3pL4N",
     };
 
