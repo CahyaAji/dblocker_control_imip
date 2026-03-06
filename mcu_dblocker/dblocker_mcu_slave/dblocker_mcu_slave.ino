@@ -1,4 +1,4 @@
-// SLAVE (STM32F401CCU6) v2.3
+// SLAVE (STM32F401CCU6) v2.4
 #include <IWatchdog.h>
 
 // Config ========================
@@ -10,13 +10,14 @@ const bool USE_RS485 = false;
 HardwareSerial CmdSerial(PA10, PA9); 
 
 uint32_t outPins[7] = { PB10, PB12, PA8, PB6, PB7, PB8, PB9 };
-// uint32_t outPins[7] = { PB8, PB7, PB6, PA8, PB12, PB10, PB9 };
-uint32_t hallSensorPins[9] = { PA1, PA2, PA3, PA4, PA5, PA6, PA7, PB0, PB1 };
+uint32_t hallSensorPins[9] = { PB1, PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1 };
 int allHallSensors[9];
 
 bool isSleeping = false;
 unsigned long lastValidPacket = 0;
-const unsigned long TIMEOUT_MS = 10000;
+
+// INCREASED TIMEOUT: Wait 25 seconds before panicking to allow Master network retries
+const unsigned long TIMEOUT_MS = 25000; 
 
 uint8_t crc8(const char* data) {
   uint8_t crc = 0;
@@ -62,8 +63,6 @@ void replyToMaster() {
   if (isSleeping) {
     sendResponseWithCrc("STA:SLEEP");
     if (USE_RS485) {
-      // Wait for the last byte to be transmitted.
-      // At 9600 baud, each character takes ~1.04ms.
       delay(2);
       digitalWrite(CMD_PIN, LOW);
     }
@@ -86,8 +85,6 @@ void replyToMaster() {
   sendResponseWithCrc(payload);
 
   if (USE_RS485) {
-      // Wait for the last byte to be transmitted.
-      // At 9600 baud, each character takes ~1.04ms.
       delay(2);
       digitalWrite(CMD_PIN, LOW);
   }
@@ -100,8 +97,6 @@ void failsafeShutdown() {
 }
 
 void processCommand(char* cmd) {
-  // Note: lastValidPacket already updated in verifyAndExecute after CRC check
-
   if (strcmp(cmd, "SLEEP") == 0) {
     isSleeping = true;
     for(int i=0; i<7; i++) digitalWrite(outPins[i], LOW);
@@ -166,7 +161,8 @@ void verifyAndExecute(char* buf) {
 }
 
 void setup(){
-  delay(100); 
+  // INCREASED DELAY: Let the Master's Ethernet chip initialize before syncing
+  delay(1000); 
   
   analogReadResolution(10); 
 

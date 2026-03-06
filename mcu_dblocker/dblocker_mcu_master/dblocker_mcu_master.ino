@@ -1,4 +1,4 @@
-// MASTER (STM32F411CEU6) v2.6
+// MASTER (STM32F411CEU6) v2.10
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
@@ -30,7 +30,7 @@ const unsigned long REBOOT_TIMEOUT = 300000;
 HardwareSerial SlaveSerial(PA10, PA9); 
 
 uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
-uint32_t hallSensorPins[9] = { PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, PB0 };
+uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 MAX6675 temp1(MAX_SCK, MAX_CS_1, MAX_MISO);
 MAX6675 temp2(MAX_SCK, MAX_CS_2, MAX_MISO);
@@ -40,6 +40,11 @@ MAX6675 temp2(MAX_SCK, MAX_CS_2, MAX_MISO);
 const char controller_id[] = "250005";
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x05 };
 IPAddress ip(10, 88, 81, 6);
+
+// --- SECURITY SETTINGS ---
+IPAddress allowed_tcp_ip_1(10, 88, 81, 100); // Primary Backend IP
+IPAddress allowed_tcp_ip_2(10, 88, 81, 101); // Backup/Dev IP
+const char TCP_SECRET[] = "IMIP_SECURE";     // Secret prefix
 // ===========================================
 
 IPAddress gateway(10, 88, 81, 1);
@@ -57,7 +62,7 @@ char topic_sta[64];
 
 int allHallSensors[18]; 
 bool lastSlaveState[7] = { 0 }; 
-bool lastMasterState[7] = { 0 };  // Save master output states for recovery
+bool lastMasterState[7] = { 0 };  
 
 unsigned long lastMqttRetry = 0;
 unsigned long lastPublish = 0;
@@ -71,12 +76,13 @@ bool isSystemSleeping = false;
 bool safetyShutdownActive = false;
 bool wasLinkUp = true;
 
-// Serial receive state (global for reset on disconnect)
+// Serial receive state
 char rxBuf[128];
 int rxIdx = 0; 
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
+EthernetServer tcpServer(8080); // Fallback TCP Server
 
 void generateIds() {
   snprintf(serial_numb, sizeof(serial_numb), "%s", controller_id);
@@ -142,7 +148,6 @@ bool validateAndExtractPayload(char* buf, char* payloadOut, size_t maxLen) {
   *pipePtr = 0;
   char* crcHex = pipePtr + 1;
   
-  // Validate CRC hex format (must be 2 hex characters)
   if (strlen(crcHex) != 2 || !isxdigit(crcHex[0]) || !isxdigit(crcHex[1])) return false;
   
   uint8_t receivedCrc = (uint8_t)strtol(crcHex, NULL, 16);
@@ -161,26 +166,21 @@ void handleSlaveData(char* buf) {
   
   lastSlaveMessage = millis();
   
-  // Mark slave as connected - sync happens via 2-second heartbeat
   if (!slaveConnected) {
     slaveConnected = true;
   }
 
   if (strstr(payload, "REQ:SYNC")) {
-    syncSlave();  // Only sync on explicit request
+    syncSlave(); 
     return;
   }
 
   if (strstr(payload, "STA:SLEEP")) {
-    // Slave is sleeping but master is not - will be synced by heartbeat
     return;
   }
   
   if (strncmp(payload, "CUR:", 4) == 0) {
-    if (isSystemSleeping) {
-        // Ignore sensor data when sleeping - heartbeat will sync slave
-        return;
-    }
+    if (isSystemSleeping) return;
 
     char* ptr = payload + 4;
     int valuesRead = 0;
@@ -213,7 +213,8 @@ void publishData() {
   
   for (int i = 0; i < 9; i++) allHallSensors[i] = analogRead(hallSensorPins[i]);
   IWatchdog.reload();
-  float t1 = temp1.readCelsius(); delay(5); 
+  float t1 = temp1.readCelsius(); 
+  delay(250);
   IWatchdog.reload();
   float t2 = temp2.readCelsius();
   IWatchdog.reload();
@@ -223,7 +224,7 @@ void publishData() {
   if (millis() - lastSlaveMessage > 10000) {
     if (slaveConnected) {
       slaveConnected = false;
-      flushSerialBuffer();  // Clear any garbage data in buffer
+      flushSerialBuffer(); 
     }
     for (int i = 9; i < 18; i++) allHallSensors[i] = 0;
   }
@@ -243,8 +244,7 @@ void publishData() {
   int tail = snprintf(msg + offset, sizeof(msg) - offset, "%d,%d|%d", t1i, t2i, slaveConnected ? 1 : 0);
   if (tail <= 0) msg[offset] = '\0';
 
-  if (!mqttClient.publish(topic_pub, msg)) {
-  }
+  mqttClient.publish(topic_pub, msg);
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 }
 
@@ -257,11 +257,38 @@ void goToSleep() {
 
 void safetyShutdown() {
   if (safetyShutdownActive) return;
-  
   safetyShutdownActive = true;
   isSystemSleeping = true;
   for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW);
   sendCommandWithCrc("SLEEP");
+}
+
+void resetW5500() {
+  digitalWrite(W5500_RST, LOW); 
+  delay(50); 
+  IWatchdog.reload();
+  digitalWrite(W5500_RST, HIGH); 
+  delay(200);
+  IWatchdog.reload();
+
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
+  ethClient.stop(); // Clear hung socket
+  tcpServer.begin(); // Restart TCP listener
+}
+
+void publishPinStateToMQTT() {
+  if (!mqttClient.connected()) return;
+  
+  uint16_t currentMask = 0;
+  for (int i = 0; i < 7; i++) {
+    if (lastMasterState[i]) currentMask |= (1 << i);
+    if (lastSlaveState[i]) currentMask |= (1 << (i + 7));
+  }
+  
+  char msg[16];
+  snprintf(msg, sizeof(msg), "PINS:%04X", currentMask);
+  
+  mqttClient.publish(topic_sta, msg, true); 
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -272,10 +299,10 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (length == 4 && memcmp(payload, "WAKE", 4) == 0) {
     isSystemSleeping = false;
     safetyShutdownActive = false;
-    // Restore master outputs to last known state
     for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
-    syncSlave();  // Wake up slave and restore its states
+    syncSlave(); 
     mqttClient.publish(topic_sta, "ONLINE", true);
+    publishPinStateToMQTT(); 
     return;
   }
   if (length == 8 && memcmp(payload, "WAKE_RST", 8) == 0) {
@@ -296,11 +323,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     for (int i = 0; i < 7; i++) {
       bool state = (mask & (1 << i)) ? HIGH : LOW;
       digitalWrite(outPins[i], state);
-      lastMasterState[i] = state;  // Save master state for recovery
+      lastMasterState[i] = state; 
     }
     for (int i = 0; i < 7; i++) lastSlaveState[i] = (mask & (1 << (i + 7)));
     syncSlave();
     safetyShutdownActive = false;
+    
+    publishPinStateToMQTT(); 
   }
 }
 
@@ -311,7 +340,6 @@ void setup() {
   SlaveSerial.begin(9600); 
   pinMode(CMD_PIN, OUTPUT); digitalWrite(CMD_PIN, LOW); 
   
-  // Hardware Reset W5500
   pinMode(W5500_RST, OUTPUT); 
   digitalWrite(W5500_RST, LOW); delay(50); 
   IWatchdog.reload();
@@ -348,6 +376,8 @@ void setup() {
   mqttClient.setServer(mqtt_broker, 1883);
   mqttClient.setCallback(mqttCallback);
   
+  tcpServer.begin(); 
+  
   syncSlave();
   lastConnectionTime = millis();
 }
@@ -377,26 +407,26 @@ void loop() {
     if (linkUp) {
         if (now - lastMqttRetry > 5000) {
           lastMqttRetry = now;
-          
           IWatchdog.reload(); 
           
           if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
             IWatchdog.reload();
             mqttClient.subscribe(topic_sub);
             
-            // Auto-recover from safety shutdown when reconnecting
             if (safetyShutdownActive) {
               safetyShutdownActive = false;
               isSystemSleeping = false;
-              // Restore master outputs to last known state
               for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
-              syncSlave();  // Wake up slave and restore its states
+              syncSlave(); 
               mqttClient.publish(topic_sta, "ONLINE", true);
             } else {
               mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
               syncSlave();
             }
+            publishPinStateToMQTT(); 
             lastConnectionTime = now;
+          } else {
+            ethClient.stop(); 
           }
           IWatchdog.reload();
         }
@@ -409,24 +439,72 @@ void loop() {
     }
     
     if (now - lastConnectionTime > REBOOT_TIMEOUT) {
-        sendCommandWithCrc("RESET");
-        IWatchdog.reload();
-        digitalWrite(LED_PIN, LOW);
-        delay(50);
-        digitalWrite(LED_PIN, HIGH);
-        delay(50);
-        digitalWrite(LED_PIN, LOW);
-        delay(50);
-        digitalWrite(LED_PIN, HIGH);
-        delay(50);
-        digitalWrite(LED_PIN, LOW);
-        IWatchdog.reload();
-        NVIC_SystemReset();
+        resetW5500();
+        lastConnectionTime = now; 
+        lastMqttRetry = now;
     }
   } else {
     mqttClient.loop();
     lastConnectionTime = now;
   }
+
+  // --- SECURE TCP FALLBACK ---
+  EthernetClient tcpClient = tcpServer.available();
+  if (tcpClient) {
+    IPAddress remote = tcpClient.remoteIP();
+    
+    if (remote != allowed_tcp_ip_1 && remote != allowed_tcp_ip_2) {
+      tcpClient.stop(); 
+    } else {
+      char tcpBuf[64];
+      int tcpIdx = 0;
+      
+      while (tcpClient.connected()) {
+        if (tcpClient.available()) {
+          char c = tcpClient.read();
+          
+          if (c == '\n' || c == '\r') {
+            if (tcpIdx > 0) {
+              tcpBuf[tcpIdx] = '\0'; 
+              
+              int secretLen = strlen(TCP_SECRET);
+              if (strncmp(tcpBuf, TCP_SECRET, secretLen) == 0 && tcpBuf[secretLen] == ':') {
+                char* cmd = tcpBuf + secretLen + 1; 
+                
+                // ONLY ACCEPT MASK COMMAND
+                if (strncmp(cmd, "MASK:", 5) == 0) {
+                  uint16_t mask = (uint16_t)strtol(cmd + 5, NULL, 16); 
+                  for (int i = 0; i < 7; i++) {
+                    bool state = (mask & (1 << i)) ? HIGH : LOW;
+                    digitalWrite(outPins[i], state);
+                    lastMasterState[i] = state; 
+                  }
+                  for (int i = 0; i < 7; i++) {
+                    lastSlaveState[i] = (mask & (1 << (i + 7))) ? 1 : 0;
+                  }
+                  syncSlave(); 
+                  publishPinStateToMQTT(); 
+                  tcpClient.print("ACK: MASK "); tcpClient.println(mask, HEX);
+                }
+                else {
+                  tcpClient.println("ERR: UNKNOWN COMMAND");
+                }
+              } else {
+                tcpClient.println("ERR: UNAUTHORIZED");
+              }
+              break; 
+            }
+          } 
+          else if (tcpIdx < sizeof(tcpBuf) - 1) {
+            tcpBuf[tcpIdx++] = c; 
+          }
+        }
+      }
+      delay(1);
+      tcpClient.stop(); 
+    }
+  }
+  // -----------------------------------------------------------
 
   if (now - lastPublish > 2000) {
     lastPublish = now;
