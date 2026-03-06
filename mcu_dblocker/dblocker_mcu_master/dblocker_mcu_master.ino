@@ -42,9 +42,7 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x05 };
 IPAddress ip(10, 88, 81, 6);
 
 // --- SECURITY SETTINGS ---
-IPAddress allowed_tcp_ip_1(10, 88, 81, 16); // Primary Backend IP
-IPAddress allowed_tcp_ip_2(10, 88, 81, 17); // Backup/Dev IP
-const char TCP_SECRET[] = "p!ml_3rUc35";     // Secret prefix
+const char TCP_SECRET[] = "p!ml_3rUc35";     // Secret prefix for TCP commands
 // ===========================================
 
 IPAddress gateway(10, 88, 81, 1);
@@ -451,12 +449,7 @@ void loop() {
   // --- SECURE TCP FALLBACK ---
   EthernetClient tcpClient = tcpServer.available();
   if (tcpClient) {
-    IPAddress remote = tcpClient.remoteIP();
-    
-    if (remote != allowed_tcp_ip_1 && remote != allowed_tcp_ip_2) {
-      tcpClient.stop(); 
-    } else {
-      char tcpBuf[64];
+    char tcpBuf[64];
       int tcpIdx = 0;
       
       while (tcpClient.connected()) {
@@ -492,17 +485,16 @@ void loop() {
               } else {
                 tcpClient.println("ERR: UNAUTHORIZED");
               }
-              break; 
-            }
-          } 
-          else if (tcpIdx < sizeof(tcpBuf) - 1) {
-            tcpBuf[tcpIdx++] = c; 
+            break; 
           }
+        } 
+        else if (tcpIdx < sizeof(tcpBuf) - 1) {
+          tcpBuf[tcpIdx++] = c; 
         }
       }
-      delay(1);
-      tcpClient.stop(); 
     }
+    delay(1);
+    tcpClient.stop(); 
   }
   // -----------------------------------------------------------
 
