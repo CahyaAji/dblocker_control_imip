@@ -42,7 +42,7 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x05 };
 IPAddress ip(10, 88, 81, 6);
 
 // --- SECURITY SETTINGS ---
-const char TCP_SECRET[] = "p!ml_3rUc35";     // Secret prefix for TCP commands
+const char TCP_SECRET[] = "p!ml_3rUc35";
 // ===========================================
 
 IPAddress gateway(10, 88, 81, 1);
