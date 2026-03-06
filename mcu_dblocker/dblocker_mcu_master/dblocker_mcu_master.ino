@@ -82,7 +82,7 @@ int rxIdx = 0;
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
-EthernetServer tcpServer(8080); // Fallback TCP Server
+EthernetServer tcpServer(8080);
 
 void generateIds() {
   snprintf(serial_numb, sizeof(serial_numb), "%s", controller_id);
@@ -272,8 +272,8 @@ void resetW5500() {
   IWatchdog.reload();
 
   Ethernet.begin(mac, ip, myDns, gateway, subnet);
-  ethClient.stop(); // Clear hung socket
-  tcpServer.begin(); // Restart TCP listener
+  ethClient.stop();
+  tcpServer.begin();
 }
 
 void publishPinStateToMQTT() {
