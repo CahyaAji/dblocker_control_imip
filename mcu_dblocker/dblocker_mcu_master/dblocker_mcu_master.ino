@@ -42,9 +42,9 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x05 };
 IPAddress ip(10, 88, 81, 6);
 
 // --- SECURITY SETTINGS ---
-IPAddress allowed_tcp_ip_1(10, 88, 81, 100); // Primary Backend IP
-IPAddress allowed_tcp_ip_2(10, 88, 81, 101); // Backup/Dev IP
-const char TCP_SECRET[] = "IMIP_SECURE";     // Secret prefix
+IPAddress allowed_tcp_ip_1(10, 88, 81, 16); // Primary Backend IP
+IPAddress allowed_tcp_ip_2(10, 88, 81, 17); // Backup/Dev IP
+const char TCP_SECRET[] = "p!ml_3rUc35";     // Secret prefix
 // ===========================================
 
 IPAddress gateway(10, 88, 81, 1);
