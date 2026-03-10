@@ -143,9 +143,7 @@
   </main>
 </div>
 
-<div
-  style="position: fixed; bottom: 10px; left: 10px; z-index: 1000; background: rgba(255, 255, 255, 0.8); padding: 8px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
->
+<div class="dev-panel">
   <!-- For testing only -->
   <!-- <SubDemo /> -->
   <MsgReceiverBox />
@@ -158,6 +156,7 @@
     height: 100vh;
     width: 100vw;
     overflow: hidden;
+    background: transparent;
   }
 
   main {
@@ -169,7 +168,11 @@
 
   .map-area {
     flex: 1;
-    background-color: #f0f0f0;
+    background-color: color-mix(
+      in srgb,
+      var(--bg-elevated) 82%,
+      var(--card-bg) 18%
+    );
     position: relative;
   }
 
@@ -180,11 +183,17 @@
   }
 
   aside {
-    background-color: var(--background-color-light);
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--card-bg) 92%, var(--accent-cyan) 8%) 0%,
+      var(--card-bg) 100%
+    );
+    border-left: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+    backdrop-filter: blur(8px);
     height: 100%;
     display: flex;
     flex-direction: column;
-    box-shadow: -2px 0 5px rgba(0, 0, 0, 0.1);
+    box-shadow: -12px 0 34px rgba(0, 0, 0, 0.12);
     transition: width 0.3s ease;
   }
 
@@ -195,47 +204,54 @@
   .sidebar-header {
     display: flex;
     align-items: center;
-    justify-content: left;
-    padding: 10px;
-    border-bottom: 1px solid #eee;
+    justify-content: space-between;
+    padding: 10px 6px;
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--separator) 76%, transparent);
     gap: 10px;
   }
 
   .hamburger {
-    background: transparent;
-    border: none;
-    font-size: 24px;
+    background: color-mix(in srgb, var(--card-bg) 86%, var(--bg-elevated) 14%);
+    border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+    border-radius: 10px;
+    font-size: 20px;
     cursor: pointer;
     color: var(--text-primary);
-    padding: 5px;
+    padding: 6px 8px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s ease;
   }
 
   .hamburger:hover {
-    background-color: var(--separator);
-    border-radius: 4px;
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent-blue) 40%, transparent);
+    box-shadow: 0 6px 16px rgba(19, 134, 217, 0.18);
   }
 
   .theme-toggle {
-    background: transparent;
-    border: none;
+    background: color-mix(in srgb, var(--card-bg) 86%, var(--bg-elevated) 14%);
+    border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+    border-radius: 10px;
     cursor: pointer;
     color: var(--text-primary);
-    padding: 5px;
+    padding: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s ease;
   }
 
   .theme-toggle:hover {
-    background-color: var(--separator);
-    border-radius: 4px;
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent-cyan) 45%, transparent);
+    box-shadow: 0 6px 16px rgba(19, 182, 217, 0.2);
   }
 
   .sidebar-content {
-    padding-right: 4px;
+    padding: 8px 6px 4px;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -243,20 +259,46 @@
   }
 
   .resizer {
-    width: 4px;
+    width: 8px;
     cursor: col-resize;
-    background-color: #f0f0f0;
-    border-left: 1px solid #ccc;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      var(--separator) 40%,
+      transparent 100%
+    );
     transition: background-color 0.2s;
     height: 100%;
     padding: 0;
     border: none;
-    background: none;
+    opacity: 0.35;
   }
 
   .resizer:hover,
   .resizer.active,
   .resizer:focus {
-    background-color: #bbb;
+    opacity: 0.9;
+    background: linear-gradient(
+      180deg,
+      transparent 0%,
+      var(--accent-blue) 50%,
+      transparent 100%
+    );
+  }
+
+  .dev-panel {
+    position: fixed;
+    left: 14px;
+    bottom: 14px;
+    z-index: 1000;
+    width: min(460px, calc(100vw - 28px));
+    max-height: min(50vh, 420px);
+    overflow: auto;
+    padding: 8px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    border: 1px solid color-mix(in srgb, var(--separator) 78%, transparent);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(8px);
   }
 </style>

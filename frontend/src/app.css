@@ -1,41 +1,67 @@
 :root {
-    --bg-color: #f2f2f7;
+    --bg-color: #eef3f6;
+    --bg-elevated: #f8fbfd;
     --card-bg: #ffffff;
-    --text-primary: #000000;
-    --text-secondary: #6d6d72;
-    --separator: #e5e5ea;
-    --accent-green: #34c759;
-    --accent-blue: #007aff;
-    --switch-bg: #e9e9ea;
+    --text-primary: #172026;
+    --text-secondary: #5a6a76;
+    --separator: #d7e1e8;
+    --accent-green: #2cc67d;
+    --accent-blue: #1386d9;
+    --accent-cyan: #13b6d9;
+    --switch-bg: #dbe4ea;
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --shadow-sm: 0 6px 14px rgba(18, 35, 48, 0.08);
+    --shadow-md: 0 16px 40px rgba(18, 35, 48, 0.14);
 }
 
 :root.dark {
-    --bg-color: #000000;
-    --card-bg: #1c1c1e;
-    --text-primary: #ffffff;
-    --text-secondary: #8e8e93;
-    --separator: #38383a;
-    --accent-green: #30d158;
-    --accent-blue: #0a84ff;
-    --switch-bg: #39393d;
+    --bg-color: #0c1217;
+    --bg-elevated: #131d24;
+    --card-bg: #19252e;
+    --text-primary: #eef4f8;
+    --text-secondary: #9ab0bf;
+    --separator: #2e3f4c;
+    --accent-green: #34dd8f;
+    --accent-blue: #33a7ff;
+    --accent-cyan: #34d5ff;
+    --switch-bg: #2a3b47;
+    --shadow-sm: 0 8px 20px rgba(0, 0, 0, 0.28);
+    --shadow-md: 0 20px 44px rgba(0, 0, 0, 0.4);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    background-color: var(--bg-color);
+    font-family: "Avenir Next", "SF Pro Text", "Segoe UI", sans-serif;
+    background:
+        radial-gradient(circle at 14% 10%, rgba(19, 182, 217, 0.14) 0%, transparent 42%),
+        radial-gradient(circle at 92% 88%, rgba(44, 198, 125, 0.12) 0%, transparent 44%),
+        var(--bg-color);
     color: var(--text-primary);
-    margin: 0;
-    padding: 0;
     -webkit-font-smoothing: antialiased;
-    transition: background-color 0.3s, color 0.3s;
+    transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* Global Card */
 .card {
     background-color: var(--card-bg);
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     padding: 14px 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+    box-shadow: var(--shadow-sm);
     margin-bottom: 2px;
 }
 
@@ -52,14 +78,19 @@ body {
 /* Buttons */
 .btn-edit {
     font-size: 14px;
-    padding: 6px 16px;
-    border-radius: 12px;
-    border: 2px solid var(--accent-blue);
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent-blue) 38%, transparent);
     color: var(--accent-blue);
-    background: transparent;
-    font-weight: 800;
+    background: color-mix(in srgb, var(--card-bg) 90%, var(--accent-blue) 10%);
+    font-weight: 700;
     cursor: pointer;
-    background-color: var(--bg-color);
+    transition: all 0.2s ease;
+}
+
+.btn-edit:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(19, 134, 217, 0.18);
 }
 
 .btn-icon {
@@ -76,7 +107,7 @@ body {
 }
 
 .btn-icon:hover {
-    background-color: var(--separator);
+    background-color: color-mix(in srgb, var(--separator) 70%, transparent);
 }
 
 /* iOS-style Switch (Compact) */
@@ -101,7 +132,7 @@ body {
     right: 0;
     bottom: 0;
     background-color: var(--switch-bg);
-    transition: 0.4s;
+    transition: 0.25s;
     border-radius: 22px;
 }
 
@@ -113,28 +144,28 @@ body {
     left: 2px;
     bottom: 2px;
     background-color: white;
-    transition: 0.4s;
+    transition: 0.25s;
     border-radius: 50%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-input:checked + .slider {
+input:checked+.slider {
     background-color: var(--accent-green);
 }
 
-input:checked + .slider:before {
+input:checked+.slider:before {
     transform: translateX(14px);
 }
 
-input:focus + .slider {
+input:focus+.slider {
     box-shadow: 0 0 1px var(--accent-green);
 }
 
 /* Control Group (iOS list style) */
 .control-group {
-    background-color: transparent;
+    background-color: color-mix(in srgb, var(--card-bg) 86%, var(--bg-elevated) 14%);
     border: 1px solid var(--separator);
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     overflow: hidden;
 }
 
@@ -163,4 +194,13 @@ input:focus + .slider {
     margin-left: 4px;
     margin-bottom: 4px;
     font-weight: 600;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--separator) 74%, var(--text-secondary) 26%);
+    border-radius: 999px;
 }
