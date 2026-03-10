@@ -140,20 +140,26 @@
     .receiver-box {
         width: 100%;
         padding: 8px;
-        font-size: 0.9rem;
+        font-size: 0.82rem;
         overflow: auto;
-        color: black;
+        color: var(--text-primary);
     }
 
     .topic-section {
         margin-top: 10px;
-        border: 1px solid #ddd;
-        border-radius: 6px;
+        border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+        border-radius: 10px;
         padding: 8px;
+        background: color-mix(
+            in srgb,
+            var(--card-bg) 85%,
+            var(--bg-elevated) 15%
+        );
     }
 
     h4 {
         margin: 0 0 8px;
+        color: var(--text-primary);
     }
 
     table {
@@ -163,13 +169,17 @@
 
     th,
     td {
-        border: 1px solid #ddd;
+        border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
         padding: 4px 6px;
         text-align: left;
         word-break: break-word;
     }
 
     th {
-        background: #f5f5f5;
+        background: color-mix(
+            in srgb,
+            var(--card-bg) 75%,
+            var(--accent-cyan) 25%
+        );
     }
 </style>

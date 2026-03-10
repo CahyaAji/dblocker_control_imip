@@ -236,30 +236,43 @@
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        border: 1px solid #ccc;
+        border-radius: 0;
     }
 
     .map-buttons {
-        margin-left: 50px;
-        margin-top: 10px;
+        margin-left: 14px;
+        margin-top: 14px;
+        padding: 4px;
         display: flex;
-        gap: 10px;
+        gap: 6px;
         position: absolute;
         z-index: 2;
+        border-radius: 999px;
+        border: 1px solid color-mix(in srgb, var(--separator) 78%, transparent);
+        background: color-mix(in srgb, var(--card-bg) 84%, transparent);
+        backdrop-filter: blur(8px);
     }
 
     button {
-        padding: 6px 12px;
-        border-radius: 6px;
-        border: solid 1px #ccc;
-        background-color: white;
+        padding: 7px 14px;
+        border-radius: 999px;
+        border: none;
+        background-color: transparent;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 700;
         cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    button:hover {
+        color: var(--text-primary);
     }
 
     button.active {
-        background-color: #333;
-        color: white;
-        border-color: #333;
+        background: var(--card-bg);
+        color: var(--text-primary);
+        box-shadow: 0 6px 16px rgba(18, 35, 48, 0.15);
     }
 
     .map-container {
@@ -276,8 +289,14 @@
     .map-layout :global(.marker-core) {
         width: 18px;
         height: 18px;
-        background: red;
-        border: 2px solid white;
+        background: radial-gradient(
+            circle at 30% 30%,
+            #ffbcae 0%,
+            #ff6f59 52%,
+            #d2361f 100%
+        );
+        border: 2px solid rgba(255, 255, 255, 0.95);
+        box-shadow: 0 0 0 4px rgba(210, 54, 31, 0.18);
         border-radius: 50%;
         z-index: 2;
         position: relative;
