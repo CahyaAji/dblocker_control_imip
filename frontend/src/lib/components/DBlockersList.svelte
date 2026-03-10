@@ -8,14 +8,12 @@
         type DBlockerConfig,
     } from "../store/dblockerStore";
 
-    // Track which cards are being edited; keep local copy of dblockers for UI editing.
     let editingIds: number[] = [];
     let dblockers: DBlocker[] = [];
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
     function toggleEditMode(blocker: DBlocker) {
         if (editingIds.includes(blocker.id)) {
-            // console.log(blocker.id, $state.snapshot(blocker).config);
             updateDBlocker(blocker.id, blocker.config);
             editingIds = editingIds.filter((i) => i !== blocker.id);
         } else {
@@ -41,7 +39,6 @@
         }
     }
 
-    // React to store updates when not editing locally.
     $: if (editingIds.length === 0) {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
@@ -155,30 +152,56 @@
         flex-direction: column;
         overflow-y: auto;
         scrollbar-color: var(--separator) var(--bg-color);
-        gap: 8px;
+        gap: 12px;
         flex: 1;
         min-height: 0;
         padding: 10px 6px;
     }
+
+    .card {
+        margin: 0;
+        border-radius: var(--radius-lg);
+        background: linear-gradient(
+            150deg,
+            color-mix(in srgb, var(--card-bg) 86%, var(--accent-blue) 14%) 0%,
+            var(--card-bg) 100%
+        );
+    }
+
     .empty {
         text-align: center;
-        color: #888;
-        margin-top: 2rem;
+        color: var(--text-secondary);
+        padding: 14px;
+        border-radius: 12px;
+        border: 1px dashed var(--separator);
     }
     .sector {
         display: flex;
         flex-direction: column;
-        gap: 2px;
-        margin-bottom: 4px;
+        gap: 4px;
+        margin-bottom: 6px;
     }
     .card-content {
         display: flex;
-        gap: 10px;
+        gap: 12px;
     }
     .col {
         flex: 1;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
+    }
+
+    .section-title {
+        font-size: 11px;
+        letter-spacing: 0.05em;
+    }
+
+    .control-row {
+        min-height: 36px;
+    }
+
+    .control-label {
+        font-size: 12px;
     }
 </style>
