@@ -1,4 +1,5 @@
 <script>
+    import DblockersCard from "./DblockersCard.svelte";
     import DBlockersList from "./DBlockersList.svelte";
 
     let activeTab = $state("dblocker");
@@ -26,7 +27,7 @@
             Content for Tab 1
         </div>
     {:else if activeTab === "dblocker"}
-        <DBlockersList />
+        <DblockersCard />
     {:else if activeTab === "scheduler"}
         <div class="other" style="background-color: orange;">
             Content for Tab 3
@@ -40,41 +41,66 @@
         flex-direction: column;
         height: 100%;
         overflow: hidden;
+        gap: 8px;
     }
 
     .other {
         display: flex;
-        height: 200px;
+        min-height: 200px;
         width: 100%;
-        background-color: gold;
+        background: linear-gradient(
+            160deg,
+            color-mix(in srgb, var(--card-bg) 90%, var(--accent-cyan) 10%) 0%,
+            color-mix(in srgb, var(--card-bg) 92%, var(--accent-blue) 8%) 100%
+        );
         margin-bottom: 4px;
         justify-items: center;
         align-items: center;
-        border-bottom: 2px solid #333;
+        border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
+        border-radius: 14px;
         justify-content: center;
+        color: var(--text-secondary);
+        font-weight: 600;
     }
 
     .tabs {
         display: flex;
-        border-bottom: 1px solid var(--separator);
-        margin-bottom: 2px;
-        
+        gap: 6px;
+        padding: 4px;
+        background: color-mix(
+            in srgb,
+            var(--card-bg) 88%,
+            var(--bg-elevated) 12%
+        );
+        border: 1px solid color-mix(in srgb, var(--separator) 75%, transparent);
+        border-radius: 999px;
     }
 
     button {
-        padding: 4px 12px;
+        padding: 7px 12px;
         cursor: pointer;
         background: none;
         border: none;
-        font-size: 13pt;
-        border-bottom: 3px solid transparent;
-        border-right: 1px solid var(--separator);
+        font-size: 12px;
+        font-weight: 700;
+        border-radius: 999px;
         color: var(--text-secondary);
+        transition: all 0.2s ease;
+        white-space: nowrap;
+    }
+
+    button:hover {
+        color: var(--text-primary);
+        background: color-mix(
+            in srgb,
+            var(--card-bg) 84%,
+            var(--bg-elevated) 16%
+        );
     }
 
     button.active {
-        border-bottom-color: var(--text-primary);
-        font-weight: bold;
+        background: var(--card-bg);
+        box-shadow: 0 8px 16px rgba(18, 35, 48, 0.12);
         color: var(--text-primary);
     }
 </style>

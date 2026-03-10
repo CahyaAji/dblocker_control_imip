@@ -1,0 +1,147 @@
+<script lang="ts">
+    import DblockerCardActions from "./DblockerCardActions.svelte";
+    import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
+    import type { DBlocker, DBlockerConfig } from "../store/dblockerStore";
+
+    export let dblocker: DBlocker;
+
+    let isExpanded = false;
+    let showAdvancedActions = false;
+    let hasEdited = false;
+
+    // A local copy of the editable config
+    let editableConfig: DBlockerConfig[] = [];
+
+    // The store's configuration
+    $: liveConfig = dblocker.config ?? [];
+
+    // When liveConfig changes, if we haven't manually edited the config,
+    // keep our editable copy synchronized.
+    $: {
+        if (isExpanded && !hasEdited) {
+            editableConfig = liveConfig.map((c) => ({ ...c }));
+        }
+    }
+
+    // A flag indicating whether the editable config differs from the live config
+    $: canReadLastState =
+        JSON.stringify(editableConfig) !== JSON.stringify(liveConfig);
+
+    function toggleExpanded() {
+        isExpanded = !isExpanded;
+        if (isExpanded) {
+            editableConfig = liveConfig.map((c) => ({ ...c }));
+            hasEdited = false;
+        } else {
+            showAdvancedActions = false;
+        }
+    }
+
+    function toggleAdvanced() {
+        showAdvancedActions = !showAdvancedActions;
+    }
+
+    function toggleEditableSignal(
+        sectorIndex: number,
+        signalKey: keyof DBlockerConfig,
+    ) {
+        editableConfig[sectorIndex][signalKey] =
+            !editableConfig[sectorIndex][signalKey];
+        editableConfig = editableConfig;
+        hasEdited = true;
+    }
+
+    function reloadFromLatest() {
+        editableConfig = liveConfig.map((c) => ({ ...c }));
+        hasEdited = false;
+    }
+
+    function applyConfig() {
+        console.log("[DBlockerCard] apply config", {
+            id: dblocker.id,
+            config: editableConfig,
+        });
+        hasEdited = false;
+    }
+
+    function handleAdvancedAction(action: "sleep" | "reboot") {
+        console.log("[DBlockerCard] advanced action", { id: dblocker.id, action });
+    }
+</script>
+
+<div class="card" class:expanded={isExpanded}>
+    <div class="card-header">
+        <div class="title-wrap">
+            <div class="card-title">{dblocker.name}</div>
+            <div class="card-meta">ini diisi online/offline</div>
+        </div>
+    </div>
+    <DblockerSectorGrid
+        {isExpanded}
+        {showAdvancedActions}
+        liveConfig={liveConfig}
+        editableConfig={editableConfig}
+        onToggleSignal={toggleEditableSignal}
+        onAdvancedAction={handleAdvancedAction}
+    />
+
+    <DblockerCardActions
+        {isExpanded}
+        {canReadLastState}
+        {showAdvancedActions}
+        onReadLastState={reloadFromLatest}
+        onApply={applyConfig}
+        onToggleAdvanced={toggleAdvanced}
+        onToggleExpanded={toggleExpanded}
+    />
+</div>
+
+<style>
+    .card {
+        margin: 0;
+        border-radius: var(--radius-lg);
+        padding: 14px;
+        overflow: hidden;
+        background: linear-gradient(
+            155deg,
+            color-mix(in srgb, var(--card-bg) 88%, var(--accent-cyan) 12%) 0%,
+            var(--card-bg) 55%,
+            color-mix(in srgb, var(--card-bg) 90%, var(--accent-green) 10%) 100%
+        );
+        border: 1px solid color-mix(in srgb, var(--separator) 60%, transparent);
+        transition:
+            transform 0.2s ease,
+            box-shadow 0.2s ease,
+            padding 0.2s ease;
+    }
+
+    .card.expanded {
+        padding: 16px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+        transform: translateY(-1px);
+    }
+
+    .card-header {
+        margin-bottom: 10px;
+    }
+
+    .title-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        width: 100%;
+        gap: 8px;
+    }
+
+    .card-title {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .card-meta {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+</style>
