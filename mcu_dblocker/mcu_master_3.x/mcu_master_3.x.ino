@@ -222,14 +222,6 @@ void processSlaveSerial() {
   }
 }
 
-void smartDelay(unsigned long ms) {
-  unsigned long start = millis();
-  while (millis() - start < ms) {
-    IWatchdog.reload(); 
-    processSlaveSerial(); 
-  }
-}
-
 void publishData() {
   if (isSystemSleeping || safetyShutdownActive) {
     return;
