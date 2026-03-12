@@ -1,18 +1,18 @@
-// MASTER (STM32F411CEU6) v2.10
+// MASTER (STM32F411CEU6) v2.11
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
 #include <max6675.h>
 #include <ctype.h>
-#include <IWatchdog.h> 
+#include <IWatchdog.h>
 
 // Config ========================
-const bool USE_RS485 = false; 
+const bool USE_RS485 = false;
 const unsigned long SAFETY_SHUTDOWN_TIMEOUT = 20000;
 const unsigned long REBOOT_TIMEOUT = 300000;
 
 #define LED_PIN PC13
-#define CMD_PIN PA11 
+#define CMD_PIN PA11
 
 // Ethernet
 #define W5500_SCK PB3
@@ -24,10 +24,10 @@ const unsigned long REBOOT_TIMEOUT = 300000;
 // Sensors
 #define MAX_SCK PB13
 #define MAX_MISO PB14
-#define MAX_CS_1 PA8  
+#define MAX_CS_1 PA8
 #define MAX_CS_2 PB1
 
-HardwareSerial SlaveSerial(PA10, PA9); 
+HardwareSerial SlaveSerial(PA10, PA9);
 
 uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
 uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
@@ -49,7 +49,7 @@ IPAddress gateway(10, 88, 81, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress myDns(8, 8, 8, 8);
 
-IPAddress mqtt_broker(10, 88, 81, 16); 
+IPAddress mqtt_broker(10, 88, 81, 16);
 const char mqtt_user[] = "DBL0KER";
 const char mqtt_pass[] = "4;1Yf,)`";
 
@@ -58,16 +58,22 @@ char topic_sub[64];
 char topic_pub[64];
 char topic_sta[64];
 
-int allHallSensors[18]; 
-bool lastSlaveState[7] = { 0 }; 
-bool lastMasterState[7] = { 0 };  
+int allHallSensors[18];
+bool lastSlaveState[7] = { 0 };
+bool lastMasterState[7] = { 0 };
+
 
 unsigned long lastMqttRetry = 0;
 unsigned long lastPublish = 0;
 unsigned long lastSlaveMessage = 0;
-unsigned long lastHeartbeat = 0; 
+unsigned long lastHeartbeat = 0;
 unsigned long lastConnectionTime = 0;
 unsigned long lastLinkDownTime = 0;
+
+// Reconnect logic
+int mqttReconnectFailures = 0;
+const int MAX_MQTT_RECONNECT_FAILURES = 4;           // Number of failed attempts before forced W5500 reset
+const unsigned long MQTT_RECONNECT_INTERVAL = 3000;  // 3 seconds
 
 bool slaveConnected = false;
 bool isSystemSleeping = false;
@@ -76,7 +82,7 @@ bool wasLinkUp = true;
 
 // Serial receive state
 char rxBuf[128];
-int rxIdx = 0; 
+int rxIdx = 0;
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
@@ -108,14 +114,14 @@ void flushSerialBuffer() {
 
 void sendToSlave(const char* data) {
   if (USE_RS485) {
-      digitalWrite(CMD_PIN, HIGH); 
-      delayMicroseconds(50); 
+    digitalWrite(CMD_PIN, HIGH);
+    delayMicroseconds(50);
   }
   SlaveSerial.print(data);
   SlaveSerial.flush();
   if (USE_RS485) {
-      delay(2); 
-      digitalWrite(CMD_PIN, LOW); 
+    delay(2);
+    digitalWrite(CMD_PIN, LOW);
   }
 }
 
@@ -130,11 +136,11 @@ void sendCommandWithCrc(const char* payload) {
 void syncSlave() {
   char payload[64];
   if (isSystemSleeping || safetyShutdownActive) {
-     snprintf(payload, sizeof(payload), "SLEEP");
+    snprintf(payload, sizeof(payload), "SLEEP");
   } else {
-     snprintf(payload, sizeof(payload), "SET:%d,%d,%d,%d,%d,%d,%d",
-           lastSlaveState[0], lastSlaveState[1], lastSlaveState[2],
-           lastSlaveState[3], lastSlaveState[4], lastSlaveState[5], lastSlaveState[6]);
+    snprintf(payload, sizeof(payload), "SET:%d,%d,%d,%d,%d,%d,%d",
+             lastSlaveState[0], lastSlaveState[1], lastSlaveState[2],
+             lastSlaveState[3], lastSlaveState[4], lastSlaveState[5], lastSlaveState[6]);
   }
   sendCommandWithCrc(payload);
 }
@@ -142,15 +148,15 @@ void syncSlave() {
 bool validateAndExtractPayload(char* buf, char* payloadOut, size_t maxLen) {
   char* pipePtr = strchr(buf, '|');
   if (!pipePtr) return false;
-  
+
   *pipePtr = 0;
   char* crcHex = pipePtr + 1;
-  
+
   if (strlen(crcHex) != 2 || !isxdigit(crcHex[0]) || !isxdigit(crcHex[1])) return false;
-  
+
   uint8_t receivedCrc = (uint8_t)strtol(crcHex, NULL, 16);
   if (crc8(buf) != receivedCrc) return false;
-  
+
   strncpy(payloadOut, buf, maxLen - 1);
   payloadOut[maxLen - 1] = '\0';
   return true;
@@ -161,22 +167,22 @@ void handleSlaveData(char* buf) {
   if (!validateAndExtractPayload(buf, payload, sizeof(payload))) {
     return;
   }
-  
+
   lastSlaveMessage = millis();
-  
+
   if (!slaveConnected) {
     slaveConnected = true;
   }
 
   if (strstr(payload, "REQ:SYNC")) {
-    syncSlave(); 
+    syncSlave();
     return;
   }
 
   if (strstr(payload, "STA:SLEEP")) {
     return;
   }
-  
+
   if (strncmp(payload, "CUR:", 4) == 0) {
     if (isSystemSleeping) return;
 
@@ -195,7 +201,7 @@ void handleSlaveData(char* buf) {
         allHallSensors[i] = 0;
       }
     }
-    
+
     if (valuesRead < 9) {
       for (int i = 9 + valuesRead; i < 18; i++) {
         allHallSensors[i] = 0;
@@ -206,12 +212,12 @@ void handleSlaveData(char* buf) {
 
 void publishData() {
   if (isSystemSleeping || safetyShutdownActive) {
-      return; 
+    return;
   }
-  
+
   for (int i = 0; i < 9; i++) allHallSensors[i] = analogRead(hallSensorPins[i]);
   IWatchdog.reload();
-  float t1 = temp1.readCelsius(); 
+  float t1 = temp1.readCelsius();
   delay(250);
   IWatchdog.reload();
   float t2 = temp2.readCelsius();
@@ -222,14 +228,14 @@ void publishData() {
   if (millis() - lastSlaveMessage > 10000) {
     if (slaveConnected) {
       slaveConnected = false;
-      flushSerialBuffer(); 
+      flushSerialBuffer();
     }
     for (int i = 9; i < 18; i++) allHallSensors[i] = 0;
   }
 
   static char msg[300];
   int offset = 0;
-  
+
   for (int i = 0; i < 18; i++) {
     int written = snprintf(msg + offset, sizeof(msg) - offset, "%d,", allHallSensors[i]);
     if (written < 0 || offset + written >= sizeof(msg)) {
@@ -248,8 +254,8 @@ void publishData() {
 
 void goToSleep() {
   isSystemSleeping = true;
-  for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW); 
-  syncSlave(); 
+  for (int i = 0; i < 7; i++) digitalWrite(outPins[i], LOW);
+  syncSlave();
   mqttClient.publish(topic_sta, "SLEEP", true);
 }
 
@@ -262,31 +268,42 @@ void safetyShutdown() {
 }
 
 void resetW5500() {
-  digitalWrite(W5500_RST, LOW); 
-  delay(50); 
+  // Hardware reset W5500
+  digitalWrite(W5500_RST, LOW);
+  delay(100);
   IWatchdog.reload();
-  digitalWrite(W5500_RST, HIGH); 
-  delay(200);
+  digitalWrite(W5500_RST, HIGH);
+  delay(300);
   IWatchdog.reload();
 
+  // Re-init SPI and Ethernet
+  SPI.setMOSI(W5500_MOSI);
+  SPI.setMISO(W5500_MISO);
+  SPI.setSCLK(W5500_SCK);
+  SPI.begin();
+  Ethernet.init(W5500_CS);
   Ethernet.begin(mac, ip, myDns, gateway, subnet);
   ethClient.stop();
   tcpServer.begin();
+
+  // Re-init MQTT
+  mqttClient.setServer(mqtt_broker, 1883);
+  mqttClient.setCallback(mqttCallback);
 }
 
 void publishPinStateToMQTT() {
   if (!mqttClient.connected()) return;
-  
+
   uint16_t currentMask = 0;
   for (int i = 0; i < 7; i++) {
     if (lastMasterState[i]) currentMask |= (1 << i);
     if (lastSlaveState[i]) currentMask |= (1 << (i + 7));
   }
-  
+
   char msg[16];
   snprintf(msg, sizeof(msg), "PINS:%04X", currentMask);
-  
-  mqttClient.publish(topic_sta, msg, true); 
+
+  mqttClient.publish(topic_sta, msg, true);
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
@@ -298,18 +315,18 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     isSystemSleeping = false;
     safetyShutdownActive = false;
     for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
-    syncSlave(); 
+    syncSlave();
     mqttClient.publish(topic_sta, "ONLINE", true);
-    publishPinStateToMQTT(); 
+    publishPinStateToMQTT();
     return;
   }
   if (length == 8 && memcmp(payload, "WAKE_RST", 8) == 0) {
     mqttClient.publish(topic_sta, "OFFLINE", true);
     sendCommandWithCrc("RESET");
     IWatchdog.reload();
-    delay(500); 
+    delay(500);
     IWatchdog.reload();
-    NVIC_SystemReset(); 
+    NVIC_SystemReset();
     return;
   }
   if (length == 9 && memcmp(payload, "RST_SLAVE", 9) == 0) {
@@ -321,13 +338,13 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     for (int i = 0; i < 7; i++) {
       bool state = (mask & (1 << i)) ? HIGH : LOW;
       digitalWrite(outPins[i], state);
-      lastMasterState[i] = state; 
+      lastMasterState[i] = state;
     }
     for (int i = 0; i < 7; i++) lastSlaveState[i] = (mask & (1 << (i + 7)));
     syncSlave();
     safetyShutdownActive = false;
-    
-    publishPinStateToMQTT(); 
+
+    publishPinStateToMQTT();
   }
 }
 
@@ -335,13 +352,14 @@ void setup() {
   IWatchdog.begin(20000000);
   analogReadResolution(10);
 
-  SlaveSerial.begin(9600); 
-  pinMode(CMD_PIN, OUTPUT); digitalWrite(CMD_PIN, LOW); 
-  
-  pinMode(W5500_RST, OUTPUT); 
-  digitalWrite(W5500_RST, LOW); delay(50); 
-  IWatchdog.reload();
-  digitalWrite(W5500_RST, HIGH); delay(200);
+  SlaveSerial.begin(9600);
+  pinMode(CMD_PIN, OUTPUT);
+  digitalWrite(CMD_PIN, LOW);
+  pinMode(W5500_RST, OUTPUT);
+  digitalWrite(W5500_RST, LOW);
+  delay(100);
+  digitalWrite(W5500_RST, HIGH);
+  delay(300);
   IWatchdog.reload();
   pinMode(LED_PIN, OUTPUT);
 
@@ -358,14 +376,17 @@ void setup() {
       IWatchdog.reload();
     }
   }
-  SPI.setMOSI(W5500_MOSI); SPI.setMISO(W5500_MISO); SPI.setSCLK(W5500_SCK); SPI.begin();
+  SPI.setMOSI(W5500_MOSI);
+  SPI.setMISO(W5500_MISO);
+  SPI.setSCLK(W5500_SCK);
+  SPI.begin();
   Ethernet.init(W5500_CS);
-  Ethernet.begin(mac, ip, myDns, gateway, subnet); 
-  
+  Ethernet.begin(mac, ip, myDns, gateway, subnet);
+
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
     while (true) {
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-      delay(50); 
+      delay(50);
       IWatchdog.reload();
     }
   }
@@ -373,20 +394,19 @@ void setup() {
   mqttClient.setBufferSize(512);
   mqttClient.setServer(mqtt_broker, 1883);
   mqttClient.setCallback(mqttCallback);
-  
-  tcpServer.begin(); 
-  
+  tcpServer.begin();
   syncSlave();
   lastConnectionTime = millis();
+  mqttReconnectFailures = 0;
 }
 
 void loop() {
-  IWatchdog.reload(); 
+  IWatchdog.reload();
   unsigned long now = millis();
 
   if (now - lastHeartbeat > 2000) {
-      lastHeartbeat = now;
-      syncSlave(); 
+    lastHeartbeat = now;
+    syncSlave();
   }
 
   bool linkUp = (Ethernet.linkStatus() == LinkON);
@@ -403,98 +423,105 @@ void loop() {
 
   if (!mqttClient.connected()) {
     if (linkUp) {
-        if (now - lastMqttRetry > 5000) {
-          lastMqttRetry = now;
-          IWatchdog.reload(); 
-          
-          if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
-            IWatchdog.reload();
-            mqttClient.subscribe(topic_sub);
-            
-            if (safetyShutdownActive) {
-              safetyShutdownActive = false;
-              isSystemSleeping = false;
-              for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
-              syncSlave(); 
-              mqttClient.publish(topic_sta, "ONLINE", true);
-            } else {
-              mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
-              syncSlave();
-            }
-            publishPinStateToMQTT(); 
-            lastConnectionTime = now;
-          } else {
-            ethClient.stop(); 
-          }
-          IWatchdog.reload();
-        }
-    } else {
-       lastMqttRetry = now;
-    }
-    
-    if (now - lastConnectionTime > SAFETY_SHUTDOWN_TIMEOUT && !safetyShutdownActive) {
-        safetyShutdown();
-    }
-    
-    if (now - lastConnectionTime > REBOOT_TIMEOUT) {
-        resetW5500();
-        lastConnectionTime = now; 
+      if (now - lastMqttRetry > MQTT_RECONNECT_INTERVAL) {
         lastMqttRetry = now;
+        IWatchdog.reload();
+        if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
+          IWatchdog.reload();
+          mqttClient.subscribe(topic_sub);
+          if (safetyShutdownActive) {
+            safetyShutdownActive = false;
+            isSystemSleeping = false;
+            for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
+            syncSlave();
+            mqttClient.publish(topic_sta, "ONLINE", true);
+          } else {
+            mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
+            syncSlave();
+          }
+          publishPinStateToMQTT();
+          lastConnectionTime = now;
+          mqttReconnectFailures = 0;
+        } else {
+          ethClient.stop();
+          mqttReconnectFailures++;
+          if (mqttReconnectFailures >= MAX_MQTT_RECONNECT_FAILURES) {
+            resetW5500();
+            mqttReconnectFailures = 0;
+            lastConnectionTime = now;
+            lastMqttRetry = now;
+          }
+        }
+        IWatchdog.reload();
+      }
+    } else {
+      lastMqttRetry = now;
+    }
+
+    if (now - lastConnectionTime > SAFETY_SHUTDOWN_TIMEOUT && !safetyShutdownActive) {
+      safetyShutdown();
+    }
+
+    if (now - lastConnectionTime > REBOOT_TIMEOUT) {
+      resetW5500();
+      lastConnectionTime = now;
+      lastMqttRetry = now;
+      mqttReconnectFailures = 0;
     }
   } else {
     mqttClient.loop();
     lastConnectionTime = now;
+    mqttReconnectFailures = 0;
   }
 
   // --- SECURE TCP FALLBACK ---
   EthernetClient tcpClient = tcpServer.available();
   if (tcpClient) {
     char tcpBuf[64];
-      int tcpIdx = 0;
-      
-      while (tcpClient.connected()) {
-        if (tcpClient.available()) {
-          char c = tcpClient.read();
-          
-          if (c == '\n' || c == '\r') {
-            if (tcpIdx > 0) {
-              tcpBuf[tcpIdx] = '\0'; 
-              
-              int secretLen = strlen(TCP_SECRET);
-              if (strncmp(tcpBuf, TCP_SECRET, secretLen) == 0 && tcpBuf[secretLen] == ':') {
-                char* cmd = tcpBuf + secretLen + 1; 
-                
-                // ONLY ACCEPT MASK COMMAND
-                if (strncmp(cmd, "MASK:", 5) == 0) {
-                  uint16_t mask = (uint16_t)strtol(cmd + 5, NULL, 16); 
-                  for (int i = 0; i < 7; i++) {
-                    bool state = (mask & (1 << i)) ? HIGH : LOW;
-                    digitalWrite(outPins[i], state);
-                    lastMasterState[i] = state; 
-                  }
-                  for (int i = 0; i < 7; i++) {
-                    lastSlaveState[i] = (mask & (1 << (i + 7))) ? 1 : 0;
-                  }
-                  syncSlave(); 
-                  publishPinStateToMQTT(); 
-                  tcpClient.print("ACK: MASK "); tcpClient.println(mask, HEX);
+    int tcpIdx = 0;
+
+    while (tcpClient.connected()) {
+      if (tcpClient.available()) {
+        char c = tcpClient.read();
+
+        if (c == '\n' || c == '\r') {
+          if (tcpIdx > 0) {
+            tcpBuf[tcpIdx] = '\0';
+
+            int secretLen = strlen(TCP_SECRET);
+            if (strncmp(tcpBuf, TCP_SECRET, secretLen) == 0 && tcpBuf[secretLen] == ':') {
+              char* cmd = tcpBuf + secretLen + 1;
+
+              // ONLY ACCEPT MASK COMMAND
+              if (strncmp(cmd, "MASK:", 5) == 0) {
+                uint16_t mask = (uint16_t)strtol(cmd + 5, NULL, 16);
+                for (int i = 0; i < 7; i++) {
+                  bool state = (mask & (1 << i)) ? HIGH : LOW;
+                  digitalWrite(outPins[i], state);
+                  lastMasterState[i] = state;
                 }
-                else {
-                  tcpClient.println("ERR: UNKNOWN COMMAND");
+                for (int i = 0; i < 7; i++) {
+                  lastSlaveState[i] = (mask & (1 << (i + 7))) ? 1 : 0;
                 }
+                syncSlave();
+                publishPinStateToMQTT();
+                tcpClient.print("ACK: MASK ");
+                tcpClient.println(mask, HEX);
               } else {
-                tcpClient.println("ERR: UNAUTHORIZED");
+                tcpClient.println("ERR: UNKNOWN COMMAND");
               }
-            break; 
+            } else {
+              tcpClient.println("ERR: UNAUTHORIZED");
+            }
+            break;
           }
-        } 
-        else if (tcpIdx < sizeof(tcpBuf) - 1) {
-          tcpBuf[tcpIdx++] = c; 
+        } else if (tcpIdx < sizeof(tcpBuf) - 1) {
+          tcpBuf[tcpIdx++] = c;
         }
       }
     }
     delay(1);
-    tcpClient.stop(); 
+    tcpClient.stop();
   }
   // -----------------------------------------------------------
 
@@ -506,20 +533,18 @@ void loop() {
   }
 
   int rxCount = 0;
-  while (SlaveSerial.available() && rxCount < 50) { 
+  while (SlaveSerial.available() && rxCount < 50) {
     rxCount++;
     char c = SlaveSerial.read();
     if (c == '$') {
-      rxIdx = 0; 
-    }
-    else if (c == '\n' || c == '\r') {
+      rxIdx = 0;
+    } else if (c == '\n' || c == '\r') {
       if (rxIdx > 0 && rxIdx < 128) {
         rxBuf[rxIdx] = 0;
         handleSlaveData(rxBuf);
       }
       rxIdx = 0;
-    } 
-    else if (rxIdx < 127) {
+    } else if (rxIdx < 127) {
       rxBuf[rxIdx++] = c;
     } else {
       rxIdx = 0;
