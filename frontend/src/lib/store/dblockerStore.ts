@@ -33,7 +33,6 @@ export async function fetchDBlockers() {
         const json = await res.json();
         // Handle wrapped response { data: [...] } or direct array [...]
         const data: DBlocker[] = Array.isArray(json) ? json : (json.data || []);
-
         // Sort by ID to keep the list order stable
         data.sort((a, b) => a.id - b.id);
 
