@@ -2,6 +2,7 @@
     import DblockerCardActions from "./DblockerCardActions.svelte";
     import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
     import type { DBlocker, DBlockerConfig } from "../store/dblockerStore";
+    import { updateDBlockerConfig } from "../store/dblockerStore";
 
     export let dblocker: DBlocker;
 
@@ -15,10 +16,10 @@
     // The store's configuration
     $: liveConfig = dblocker.config ?? [];
 
-    // When liveConfig changes, if we haven't manually edited the config,
-    // keep our editable copy synchronized.
+    // Sync editableConfig with liveConfig ONLY if not waiting for backend confirmation
+    let waitingForBackend = false;
     $: {
-        if (isExpanded && !hasEdited) {
+        if (isExpanded && !hasEdited && !waitingForBackend) {
             editableConfig = liveConfig.map((c) => ({ ...c }));
         }
     }
@@ -56,16 +57,34 @@
         hasEdited = false;
     }
 
-    function applyConfig() {
-        console.log("[DBlockerCard] apply config", {
-            id: dblocker.id,
-            config: editableConfig,
-        });
-        hasEdited = false;
+    async function applyConfig() {
+        try {
+            waitingForBackend = true;
+            await updateDBlockerConfig(dblocker.id, editableConfig);
+            // Wait for backend/store to match our local config
+            const checkMatch = () => {
+                const isMatch =
+                    JSON.stringify(dblocker.config) ===
+                    JSON.stringify(editableConfig);
+                if (isMatch) {
+                    hasEdited = false;
+                    waitingForBackend = false;
+                } else {
+                    setTimeout(checkMatch, 100);
+                }
+            };
+            checkMatch();
+        } catch (err) {
+            waitingForBackend = false;
+            // Error already handled in updateDBlockerConfig
+        }
     }
 
     function handleAdvancedAction(action: "sleep" | "reboot") {
-        console.log("[DBlockerCard] advanced action", { id: dblocker.id, action });
+        console.log("[DBlockerCard] advanced action", {
+            id: dblocker.id,
+            action,
+        });
     }
 </script>
 
@@ -79,8 +98,8 @@
     <DblockerSectorGrid
         {isExpanded}
         {showAdvancedActions}
-        liveConfig={liveConfig}
-        editableConfig={editableConfig}
+        {liveConfig}
+        {editableConfig}
         onToggleSignal={toggleEditableSignal}
         onAdvancedAction={handleAdvancedAction}
     />
@@ -143,5 +162,9 @@
         font-size: 11px;
         font-weight: 600;
         color: var(--text-secondary);
+    }
+
+    .card-meta.online {
+        color: var(--accent-green);
     }
 </style>
