@@ -9,7 +9,7 @@
 
     type ParsedPayload = {
         currents: number[];
-        temperatures: number[];
+        temperature: number;
         digital: boolean | null;
         raw: string;
     };
@@ -27,7 +27,7 @@
             .map((item) => Number(item.trim()))
             .filter((item) => !Number.isNaN(item));
 
-        if (values.length < 20) return null;
+        if (values.length < 19) return null;
 
         const digitalRaw = (digitalPart ?? "").trim();
         const digital =
@@ -35,7 +35,7 @@
 
         return {
             currents: values.slice(0, 18),
-            temperatures: values.slice(18, 20),
+            temperature: values[18],
             digital,
             raw: payload,
         };
@@ -107,12 +107,10 @@
                                 </tr>
                             {/each}
 
-                            {#each entry.parsed.temperatures as value, idx}
-                                <tr>
-                                    <td>Temperature {idx + 1}</td>
-                                    <td>{value / 100}</td>
-                                </tr>
-                            {/each}
+                            <tr>
+                                <td>Temperature (raw)</td>
+                                <td>{entry.parsed.temperature}</td>
+                            </tr>
 
                             <tr>
                                 <td>Slave Connected</td>
