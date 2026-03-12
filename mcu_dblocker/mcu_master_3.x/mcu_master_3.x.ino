@@ -237,7 +237,6 @@ void publishData() {
   
   for (int i = 0; i < 9; i++) allHallSensors[i] = analogRead(hallSensorPins[i]);
   
-  // Read analog temperature sensor (10-bit: 0-1023)
   int tempRaw = analogRead(TEMP_SENSOR_PIN);
 
   if (millis() - lastSlaveMessage > 10000) {
@@ -311,7 +310,7 @@ void publishPinStateToMQTT() {
   }
 
   char msg[16];
-  snprintf(msg, sizeof(msg), "PINS:%04X", currentMask);
+  snprintf(msg, sizeof(msg), "ON:%04X", currentMask);
   mqttClient.publish(topic_sta, msg, true);
 }
 
@@ -325,12 +324,11 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     safetyShutdownActive = false;
     for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
     syncSlave();
-    mqttClient.publish(topic_sta, "ONLINE", true);
     publishPinStateToMQTT();
     return;
   }
   if (length == 8 && memcmp(payload, "WAKE_RST", 8) == 0) {
-    mqttClient.publish(topic_sta, "OFFLINE", true);
+    mqttClient.publish(topic_sta, "OFF", true);
     sendCommandWithCrc("RESET");
     delay(500);
     NVIC_SystemReset();
@@ -444,7 +442,7 @@ void loop() {
         lastMqttRetry = now;
         ethClient.stop(); 
         
-        if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFFLINE")) {
+        if (mqttClient.connect(serial_numb, mqtt_user, mqtt_pass, topic_sta, 1, true, "OFF")) {
           wasMqttConnected = true; 
           mqttClient.subscribe(topic_sub);
           
@@ -453,12 +451,14 @@ void loop() {
             isSystemSleeping = false;
             for (int i = 0; i < 7; i++) digitalWrite(outPins[i], lastMasterState[i] ? HIGH : LOW);
             syncSlave();
-            mqttClient.publish(topic_sta, "ONLINE", true);
           } else {
-            mqttClient.publish(topic_sta, isSystemSleeping ? "SLEEP" : "ONLINE", true);
             syncSlave();
           }
-          publishPinStateToMQTT();
+          if (isSystemSleeping) {
+            mqttClient.publish(topic_sta, "SLEEP", true);
+          } else {
+            publishPinStateToMQTT();
+          }
           lastConnectionTime = now;
           mqttReconnectFailures = 0;
         } else {
