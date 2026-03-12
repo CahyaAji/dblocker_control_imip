@@ -1,4 +1,4 @@
-// SLAVE (STM32F401CCU6) v2.4
+// SLAVE (STM32F401CCU6) v2.4 -- will not used
 #include <IWatchdog.h>
 
 // Config ========================

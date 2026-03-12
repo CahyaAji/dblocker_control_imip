@@ -1,4 +1,4 @@
-// MASTER (STM32F411CEU6) v3.0
+// MASTER (STM32F411CEU6) v3.1
 #include <SPI.h>
 #include <Ethernet.h>
 #include <PubSubClient.h>
@@ -167,12 +167,12 @@ void handleSlaveData(char* buf) {
     slaveConnected = true;
   }
 
-  if (strstr(payload, "REQ:SYNC")) {
+  if (strcmp(payload, "REQ:SYNC") == 0) {
     syncSlave();
     return;
   }
 
-  if (strstr(payload, "STA:SLEEP")) {
+  if (strcmp(payload, "STA:SLEEP") == 0) {
     return;
   }
 
@@ -296,6 +296,7 @@ void resetW5500() {
   ethClient.stop();
   tcpServer.begin();
 
+  mqttClient.setBufferSize(512);
   mqttClient.setServer(mqtt_broker, 1883);
   mqttClient.setCallback(mqttCallback);
 }
@@ -498,8 +499,14 @@ void loop() {
   if (tcpClient) {
     char tcpBuf[64];
     int tcpIdx = 0;
+    unsigned long tcpStart = millis();
 
     while (tcpClient.connected()) {
+      IWatchdog.reload();
+      if (millis() - tcpStart > 2000) {
+        tcpClient.println("ERR: TIMEOUT");
+        break;
+      }
       if (tcpClient.available()) {
         char c = tcpClient.read();
 
