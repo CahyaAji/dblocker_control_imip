@@ -14,7 +14,7 @@ import (
 // ========================================
 // EDIT THIS TOPIC TO SUBSCRIBE
 // ========================================
-const subscribeTopic = "dbl/250005/sta"
+const subscribeTopic = "dbl/250002/sta"
 
 // ========================================
 

@@ -22,7 +22,7 @@ const (
 	username  = "DBL0KER"
 	password  = "4;1Yf,)`"
 	clientID  = "dblocker-control-sender"
-	serialNum = "250005" // Change per device
+	serialNum = "250002" // Change per device
 )
 
 // ========================================

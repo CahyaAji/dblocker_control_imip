@@ -44,8 +44,9 @@ func decodeDBlockerMask(mask uint16) string {
 
 func main() {
 	// 1. Configuration
+	broker := "tcp://10.88.81.16:1883"
 	// broker := "tcp://192.168.100.209:1883"
-	broker := "tcp://localhost:1883"
+	// broker := "tcp://localhost:1883"
 	username := "DBL0KER"
 	password := "4;1Yf,)`"
 	topic := "#"
