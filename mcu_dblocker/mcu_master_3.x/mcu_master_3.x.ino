@@ -1,6 +1,7 @@
-// MASTER (STM32F411CEU6) v3.1
+// MASTER (STM32F411CEU6) v3.2
 #include <SPI.h>
 #include <Ethernet.h>
+#include <EthernetUdp.h>
 #include <PubSubClient.h>
 #include <ctype.h>
 #include <IWatchdog.h>
@@ -35,7 +36,8 @@ byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x02 };
 IPAddress ip(10, 88, 81, 3);
 
 // --- SECURITY SETTINGS ---
-const char TCP_SECRET[] = "p!ml_3rUc35";
+const char UDP_SECRET[] = "p!ml_3rUc35";
+const uint16_t UDP_PORT = 51515;
 // ===========================================
 
 IPAddress gateway(10, 88, 81, 1);
@@ -79,7 +81,7 @@ int rxIdx = 0;
 
 EthernetClient ethClient;
 PubSubClient mqttClient(ethClient);
-EthernetServer tcpServer(8080);
+EthernetUDP udpServer;
 
 void generateIds() {
   snprintf(serial_numb, sizeof(serial_numb), "%s", controller_id);
@@ -286,7 +288,7 @@ void resetW5500() {
   Ethernet.init(W5500_CS);
   Ethernet.begin(mac, ip, myDns, gateway, subnet);
   ethClient.stop();
-  tcpServer.begin();
+  udpServer.begin(UDP_PORT);
 
   mqttClient.setBufferSize(512);
   mqttClient.setServer(mqtt_broker, 1883);
@@ -392,7 +394,7 @@ void setup() {
   mqttClient.setBufferSize(512);
   mqttClient.setServer(mqtt_broker, 1883);
   mqttClient.setCallback(mqttCallback);
-  tcpServer.begin();
+  udpServer.begin(UDP_PORT);
   syncSlave();
   lastConnectionTime = millis();
   mqttReconnectFailures = 0;
@@ -487,27 +489,44 @@ void loop() {
     mqttReconnectFailures = 0;
   }
 
-  EthernetClient tcpClient = tcpServer.available();
-  if (tcpClient) {
-    char tcpBuf[64];
-    int tcpIdx = 0;
-    unsigned long tcpStart = millis();
-
-    while (tcpClient.connected()) {
-      IWatchdog.reload();
-      if (millis() - tcpStart > 2000) {
-        tcpClient.println("ERR: TIMEOUT");
-        break;
+  int packetSize = udpServer.parsePacket();
+  if (packetSize > 0 && packetSize < 64) {
+    char udpBuf[64];
+    int len = udpServer.read(udpBuf, sizeof(udpBuf) - 1);
+    if (len > 0) {
+      udpBuf[len] = '\0';
+      // Strip trailing newlines
+      while (len > 0 && (udpBuf[len-1] == '\n' || udpBuf[len-1] == '\r')) {
+        udpBuf[--len] = '\0';
       }
-      if (tcpClient.available()) {
-        char c = tcpClient.read();
-
-        if (c == '\n' || c == '\r') {
-          if (tcpIdx > 0) {
-            tcpBuf[tcpIdx] = '\0';
-            int secretLen = strlen(TCP_SECRET);
-            if (strncmp(tcpBuf, TCP_SECRET, secretLen) == 0 && tcpBuf[secretLen] == ':') {
-              char* cmd = tcpBuf + secretLen + 1;
+      
+      // Validate CRC: format is "payload|XX" where XX is CRC8 hex
+      char* pipePtr = strchr(udpBuf, '|');
+      if (!pipePtr || strlen(pipePtr + 1) != 2) {
+        udpServer.beginPacket(udpServer.remoteIP(), udpServer.remotePort());
+        udpServer.write("ERR: MISSING CRC");
+        udpServer.endPacket();
+      } else {
+        *pipePtr = '\0';
+        char* crcHex = pipePtr + 1;
+        
+        if (!isxdigit(crcHex[0]) || !isxdigit(crcHex[1])) {
+          udpServer.beginPacket(udpServer.remoteIP(), udpServer.remotePort());
+          udpServer.write("ERR: INVALID CRC FORMAT");
+          udpServer.endPacket();
+        } else {
+          uint8_t receivedCrc = (uint8_t)strtol(crcHex, NULL, 16);
+          uint8_t calculatedCrc = crc8(udpBuf);
+          
+          if (receivedCrc != calculatedCrc) {
+            udpServer.beginPacket(udpServer.remoteIP(), udpServer.remotePort());
+            udpServer.write("ERR: CRC MISMATCH");
+            udpServer.endPacket();
+          } else {
+            // CRC valid, now check auth and command
+            int secretLen = strlen(UDP_SECRET);
+            if (strncmp(udpBuf, UDP_SECRET, secretLen) == 0 && udpBuf[secretLen] == ':') {
+              char* cmd = udpBuf + secretLen + 1;
 
               if (strncmp(cmd, "MASK:", 5) == 0) {
                 uint16_t mask = (uint16_t)strtol(cmd + 5, NULL, 16);
@@ -521,23 +540,27 @@ void loop() {
                 }
                 syncSlave();
                 publishPinStateToMQTT();
-                tcpClient.print("ACK: MASK ");
-                tcpClient.println(mask, HEX);
+                
+                // Send ACK back to sender
+                udpServer.beginPacket(udpServer.remoteIP(), udpServer.remotePort());
+                char ack[24];
+                snprintf(ack, sizeof(ack), "ACK: MASK %04X", mask);
+                udpServer.write(ack);
+                udpServer.endPacket();
               } else {
-                tcpClient.println("ERR: UNKNOWN COMMAND");
+                udpServer.beginPacket(udpServer.remoteIP(), udpServer.remotePort());
+                udpServer.write("ERR: UNKNOWN COMMAND");
+                udpServer.endPacket();
               }
             } else {
-              tcpClient.println("ERR: UNAUTHORIZED");
+              udpServer.beginPacket(udpServer.remoteIP(), udpServer.remotePort());
+              udpServer.write("ERR: UNAUTHORIZED");
+              udpServer.endPacket();
             }
-            break;
           }
-        } else if (tcpIdx < sizeof(tcpBuf) - 1) {
-          tcpBuf[tcpIdx++] = c;
         }
       }
     }
-    delay(1);
-    tcpClient.stop();
   }
 
   if (now - lastPublish > 2000) {
