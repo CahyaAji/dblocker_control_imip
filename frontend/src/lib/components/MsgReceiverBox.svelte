@@ -8,9 +8,17 @@
     };
 
     type ParsedPayload = {
-        currents: number[];
+        hallSensors: number[];
         temperature: number;
-        digital: boolean | null;
+        slaveConnected: boolean;
+        raw: string;
+    };
+
+    type ParsedStatusPayload = {
+        mode: "OFF" | "SLEEP" | "ON";
+        maskHex?: string;
+        masterMask?: number;
+        slaveMask?: number;
         raw: string;
     };
 
@@ -18,8 +26,8 @@
     let status = "connecting…";
     let source: EventSource | null = null;
 
-    const parsePayload = (payload: string): ParsedPayload | null => {
-        const [numericPart, digitalPart] = payload.split("|");
+    const parseReportPayload = (payload: string): ParsedPayload | null => {
+        const [numericPart, slavePart] = payload.split("|");
         if (!numericPart) return null;
 
         const values = numericPart
@@ -27,16 +35,46 @@
             .map((item) => Number(item.trim()))
             .filter((item) => !Number.isNaN(item));
 
-        if (values.length < 19) return null;
+        // MCU master format: hall[18],temperature|slaveConnected
+        if (values.length !== 19) return null;
 
-        const digitalRaw = (digitalPart ?? "").trim();
-        const digital =
-            digitalRaw === "1" ? true : digitalRaw === "0" ? false : null;
+        const slaveRaw = (slavePart ?? "").trim();
+        if (slaveRaw !== "0" && slaveRaw !== "1") return null;
 
         return {
-            currents: values.slice(0, 18),
+            hallSensors: values.slice(0, 18),
             temperature: values[18],
-            digital,
+            slaveConnected: slaveRaw === "1",
+            raw: payload,
+        };
+    };
+
+    const parseStatusPayload = (
+        payload: string,
+    ): ParsedStatusPayload | null => {
+        const trimmed = payload.trim();
+
+        if (trimmed === "OFF") {
+            return { mode: "OFF", raw: payload };
+        }
+
+        if (trimmed === "SLEEP") {
+            return { mode: "SLEEP", raw: payload };
+        }
+
+        const onMatch = /^ON:([0-9A-Fa-f]{4})$/.exec(trimmed);
+        if (!onMatch) return null;
+
+        const maskHex = onMatch[1].toUpperCase();
+        const mask = Number.parseInt(maskHex, 16);
+        const masterMask = mask & 0x007f;
+        const slaveMask = (mask >> 7) & 0x007f;
+
+        return {
+            mode: "ON",
+            maskHex,
+            masterMask,
+            slaveMask,
             raw: payload,
         };
     };
@@ -62,10 +100,19 @@
     $: topicEntries = Object.entries(latestByTopic).sort(([a], [b]) =>
         a.localeCompare(b),
     );
-    $: parsedEntries = topicEntries.map(([topic, payload]) => ({
-        topic,
-        parsed: parsePayload(payload),
-    }));
+    $: parsedEntries = topicEntries.map(([topic, payload]) => {
+        const isReportTopic = topic.endsWith("/rpt");
+        const isStatusTopic = topic.endsWith("/sta");
+
+        return {
+            topic,
+            payload,
+            report: isReportTopic ? parseReportPayload(payload) : null,
+            status: isStatusTopic ? parseStatusPayload(payload) : null,
+            isReportTopic,
+            isStatusTopic,
+        };
+    });
 
     onMount(() => {
         source = new EventSource(`${API_BASE}/events`);
@@ -91,7 +138,7 @@
             <div class="topic-section">
                 <h4>@{entry.topic}</h4>
 
-                {#if entry.parsed}
+                {#if entry.isReportTopic && entry.report}
                     <table>
                         <thead>
                             <tr>
@@ -100,34 +147,61 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {#each entry.parsed.currents as value, idx}
+                            {#each entry.report.hallSensors as value, idx}
                                 <tr>
-                                    <td>Current {idx + 1}</td>
+                                    <td>Hall {idx + 1}</td>
                                     <td>{value}</td>
                                 </tr>
                             {/each}
 
                             <tr>
                                 <td>Temperature (raw)</td>
-                                <td>{entry.parsed.temperature}</td>
+                                <td>{entry.report.temperature}</td>
                             </tr>
 
                             <tr>
                                 <td>Slave Connected</td>
-                                <td>
-                                    {#if entry.parsed.digital === null}
-                                        -
-                                    {:else if entry.parsed.digital}
-                                        true
-                                    {:else}
-                                        false
-                                    {/if}
-                                </td>
+                                <td
+                                    >{entry.report.slaveConnected
+                                        ? "true"
+                                        : "false"}</td
+                                >
                             </tr>
                         </tbody>
                     </table>
+                {:else if entry.isStatusTopic && entry.status}
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Field</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>Status</td>
+                                <td>{entry.status.mode}</td>
+                            </tr>
+                            {#if entry.status.mode === "ON"}
+                                <tr>
+                                    <td>Mask (Hex)</td>
+                                    <td>{entry.status.maskHex}</td>
+                                </tr>
+                                <tr>
+                                    <td>Master Bits (0-6)</td>
+                                    <td>{entry.status.masterMask}</td>
+                                </tr>
+                                <tr>
+                                    <td>Slave Bits (7-13)</td>
+                                    <td>{entry.status.slaveMask}</td>
+                                </tr>
+                            {/if}
+                        </tbody>
+                    </table>
+                {:else if entry.isReportTopic || entry.isStatusTopic}
+                    <p>Invalid payload format: {entry.payload}</p>
                 {:else}
-                    <p>Invalid payload format: {latestByTopic[entry.topic]}</p>
+                    <p>Raw payload: {entry.payload}</p>
                 {/if}
             </div>
         {/each}
