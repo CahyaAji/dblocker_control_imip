@@ -7,7 +7,6 @@
         payload?: string;
     };
 
-
     type CurrentData = {
         raw: number;
         amps: number;
@@ -33,7 +32,6 @@
     let latestByTopic: Record<string, string> = {};
     let status = "connecting…";
     let source: EventSource | null = null;
-
 
     // --- MATH CONVERSIONS ---
     const calculateTemperatureC = (rawADC: number): number | null => {
@@ -81,9 +79,9 @@
         const temperatureRaw = values[18];
 
         // Map the first 18 raw values to objects containing both raw and calculated amps
-        const currents = values.slice(0, 18).map(raw => ({
+        const currents = values.slice(0, 18).map((raw) => ({
             raw,
-            amps: calculateCurrentA(raw)
+            amps: calculateCurrentA(raw),
         }));
 
         return {
@@ -172,47 +170,54 @@
 </script>
 
 <div class="receiver-box">
-    <h4>Development Only</h4>
-    <p>Status: {status}</p>
-
     {#if parsedEntries.length === 0}
         <p>No topic updates yet.</p>
     {:else}
         {#each parsedEntries as entry}
             <div class="topic-section">
-                <h4>@{entry.topic}</h4>
+                <p>@{entry.topic}</p>
                 {#if entry.isReportTopic && entry.parsed}
                     <table class="current-table">
-                        <thead>
-                            <tr>
-                                <th>Current #</th>
-                                <th>Raw Value</th>
-                                <th>Converted (A)</th>
-                            </tr>
-                        </thead>
                         <tbody>
-                            {#each entry.parsed.currents as current, idx}
+                            {#each [0, 1, 2] as row}
                                 <tr>
-                                    <td>Current {idx}</td>
-                                    <td>{current.raw}</td>
-                                    <td>{current.amps.toFixed(3)}</td>
+                                    <td class="row-label"
+                                        >{row === 2 ? "gps" : "rc"}</td
+                                    >
+                                    {#each Array.from({ length: 6 }, (_, col) => row + col * 3) as idx}
+                                        <td>
+                                            {entry.parsed.currents[
+                                                idx
+                                            ].amps.toFixed(2)}
+                                        </td>
+                                    {/each}
                                 </tr>
                             {/each}
                             <tr>
-                                <td>Temperature</td>
-                                <td>{entry.parsed.temperatureRaw}</td>
-                                <td>{entry.parsed.temperatureCelsius !== null ? entry.parsed.temperatureCelsius.toFixed(2) + ' °C' : 'N/A'}</td>
+                                <td class="row-label">temp</td>
+                                <td colspan="3"
+                                    >temp: {entry.parsed.temperatureCelsius !==
+                                    null
+                                        ? entry.parsed.temperatureCelsius.toFixed(
+                                              2,
+                                          ) + "°C"
+                                        : "N/A"}</td
+                                >
+                                <td colspan="3"
+                                    >slave connected: {entry.parsed.digital ===
+                                    null
+                                        ? "N/A"
+                                        : entry.parsed.digital
+                                          ? "true"
+                                          : "false"}</td
+                                >
                             </tr>
                         </tbody>
                     </table>
-                    <div class="digital-info">
-                        <span>Digital Raw: {entry.parsed.digitalRaw}</span>
-                        <span>Digital: {entry.parsed.digital === null ? 'N/A' : entry.parsed.digital ? 'true' : 'false'}</span>
-                    </div>
                 {:else if entry.isReportTopic}
-                    <p>Invalid payload format: {entry.payload}</p>
+                    <p>Invalid payload format.</p>
                 {:else}
-                    <p>Raw payload: {entry.payload}</p>
+                    <p>Waiting for report payload.</p>
                 {/if}
             </div>
         {/each}
@@ -220,29 +225,27 @@
 </div>
 
 <style>
+    p {
+        margin: 2px;
+    }
     .receiver-box {
         width: 100%;
-        padding: 8px;
+        padding: 2px;
         font-size: 0.82rem;
         overflow: auto;
         color: var(--text-primary);
     }
 
     .topic-section {
-        margin-top: 10px;
+        margin-top: 4px;
         border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
         border-radius: 10px;
-        padding: 8px;
+        padding: 4px;
         background: color-mix(
             in srgb,
             var(--card-bg) 85%,
             var(--bg-elevated) 15%
         );
-    }
-
-    h4 {
-        margin: 0 0 8px;
-        color: var(--text-primary);
     }
 
     table.current-table {
@@ -251,7 +254,6 @@
         margin-bottom: 8px;
     }
 
-    .current-table th,
     .current-table td {
         border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
         padding: 4px 6px;
@@ -259,19 +261,11 @@
         word-break: break-word;
     }
 
-    .current-table th {
-        background: color-mix(
-            in srgb,
-            var(--card-bg) 75%,
-            var(--accent-cyan) 25%
-        );
-    }
-
-    .digital-info {
-        font-size: 0.9em;
-        color: var(--text-secondary, #888);
-        margin-bottom: 4px;
-        display: flex;
-        gap: 1.5em;
+    .current-table td.row-label {
+        width: 52px;
+        font-weight: 600;
+        text-transform: lowercase;
+        white-space: nowrap;
+        background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
     }
 </style>
