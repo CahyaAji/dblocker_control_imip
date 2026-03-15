@@ -61,7 +61,7 @@
         display: flex;
         flex-direction: column;
         gap: 8px;
-        overflow: hidden;
+        overflow: visible;
     }
 
     .collapsed-action {

@@ -41,7 +41,7 @@
         flex-direction: column;
         height: 100%;
         overflow: hidden;
-        gap: 8px;
+        gap: 0px;
     }
 
     .other {

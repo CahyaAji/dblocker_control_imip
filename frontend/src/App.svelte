@@ -38,8 +38,8 @@
     if (!isResizing) return;
     const newWidth = window.innerWidth - e.clientX;
 
-    // Limits: Min 300px, Max 50% of screen
-    if (newWidth > 330 && newWidth < window.innerWidth * 0.5) {
+    // Limits: Min 370px, Max 50% of screen
+    if (newWidth > 370 && newWidth < window.innerWidth * 0.5) {
       $settings.sidebarWidth = newWidth;
     }
   };
@@ -251,7 +251,7 @@
   }
 
   .sidebar-content {
-    padding: 8px 6px 4px;
+    padding: 4px 2px 4px;
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -291,8 +291,8 @@
     left: 14px;
     bottom: 14px;
     z-index: 1000;
-    width: min(460px, calc(100vw - 28px));
-    max-height: min(50vh, 420px);
+    width: min(420px, calc(100vw - 28px));
+    max-height: min(75vh, 420px);
     overflow: auto;
     padding: 8px;
     border-radius: 12px;

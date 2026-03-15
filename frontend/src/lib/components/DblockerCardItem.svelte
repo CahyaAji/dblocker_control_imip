@@ -120,14 +120,18 @@
         margin: 0;
         border-radius: var(--radius-lg);
         padding: 14px;
-        overflow: hidden;
+        overflow: visible;
         background: linear-gradient(
             155deg,
-            color-mix(in srgb, var(--card-bg) 88%, var(--accent-cyan) 12%) 0%,
-            var(--card-bg) 55%,
-            color-mix(in srgb, var(--card-bg) 90%, var(--accent-green) 10%) 100%
+            color-mix(in srgb, var(--card-bg) 74%, var(--bg-elevated) 26%) 0%,
+            color-mix(in srgb, var(--card-bg) 90%, var(--accent-cyan) 10%) 50%,
+            color-mix(in srgb, var(--card-bg) 82%, var(--accent-green) 18%) 100%
         );
-        border: 1px solid color-mix(in srgb, var(--separator) 60%, transparent);
+        border: 1px solid
+            color-mix(in srgb, var(--separator) 74%, var(--accent-blue) 26%);
+        box-shadow:
+            0 10px 24px rgba(18, 35, 48, 0.1),
+            inset 0 1px 0 rgba(255, 255, 255, 0.22);
         transition:
             transform 0.2s ease,
             box-shadow 0.2s ease,
@@ -136,7 +140,9 @@
 
     .card.expanded {
         padding: 16px;
-        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+        box-shadow:
+            0 14px 34px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.26);
         transform: translateY(-1px);
     }
 

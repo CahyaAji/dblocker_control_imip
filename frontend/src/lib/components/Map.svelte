@@ -87,7 +87,7 @@
         const baseRotation = dblocker.angle_start || 0;
         const configs = dblocker.config || [];
         for (let i = 0; i < 6; i++) {
-            const angle = i * 60 + baseRotation;
+            const angle = i * 60 + baseRotation - 90;
             for (let layer = 0; layer < 2; layer++) {
                 const sectorConfig = configs[i];
                 if (!sectorConfig) continue;
@@ -163,8 +163,8 @@
         map = new maplibregl.Map({
             container: mapContainer,
             style: MAP_STYLES[$settings.mapStyle],
-            center: [110.44053927286228, -7.777395993083473],
-            zoom: 14,
+            center: [122.13, -2.81],
+            zoom: 13,
         });
         map.addControl(new maplibregl.NavigationControl(), "top-left");
 
@@ -240,7 +240,7 @@
     }
 
     .map-buttons {
-        margin-left: 14px;
+        margin-left: 48px;
         margin-top: 14px;
         padding: 4px;
         display: flex;

@@ -30,7 +30,10 @@
                                         type="checkbox"
                                         checked={sectorCfg.signal_ctrl}
                                         on:change={() =>
-                                            onToggleSignal(index, "signal_ctrl")}
+                                            onToggleSignal(
+                                                index,
+                                                "signal_ctrl",
+                                            )}
                                     />
                                     <span class="slider"></span>
                                 </label>
@@ -54,7 +57,8 @@
                 <div class="expanded-col">
                     {#each liveConfig.slice(3, 6) as config, index}
                         {@const sectorIndex = index + 3}
-                        {@const sectorCfg = editableConfig[sectorIndex] || config}
+                        {@const sectorCfg =
+                            editableConfig[sectorIndex] || config}
                         <div class="sector interactive">
                             <div class="sector-title">
                                 Sector {sectorIndex + 1}
@@ -66,7 +70,10 @@
                                         type="checkbox"
                                         checked={sectorCfg.signal_ctrl}
                                         on:change={() =>
-                                            onToggleSignal(sectorIndex, "signal_ctrl")}
+                                            onToggleSignal(
+                                                sectorIndex,
+                                                "signal_ctrl",
+                                            )}
                                     />
                                     <span class="slider"></span>
                                 </label>
@@ -78,7 +85,10 @@
                                         type="checkbox"
                                         checked={sectorCfg.signal_gps}
                                         on:change={() =>
-                                            onToggleSignal(sectorIndex, "signal_gps")}
+                                            onToggleSignal(
+                                                sectorIndex,
+                                                "signal_gps",
+                                            )}
                                     />
                                     <span class="slider"></span>
                                 </label>
@@ -89,7 +99,10 @@
             </div>
 
             {#if showAdvancedActions}
-                <div class="advanced-sector-wrap" transition:slide={{ duration: 300 }}>
+                <div
+                    class="advanced-sector-wrap"
+                    transition:slide={{ duration: 300 }}
+                >
                     <div class="sector interactive advanced-sector">
                         <div class="sector-title">Advanced Action</div>
                         <button
@@ -138,6 +151,10 @@
             max-height 0.32s cubic-bezier(0.4, 0.2, 0.2, 1),
             padding 0.28s cubic-bezier(0.4, 0.2, 0.2, 1);
         overflow: hidden;
+    }
+
+    .content-wrap.expanded {
+        overflow: visible;
     }
     .compact-grid {
         display: grid;
