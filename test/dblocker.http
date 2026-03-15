@@ -2,35 +2,26 @@
 POST http://10.88.81.16:8080/api/dblockers
 Content-Type: application/json
 
+# {
+#     "name": "1 Runway 13 Bandara",
+#     "serial_numb": "250001",
+#     "ip": "10.88.81.2",
+#     "latitude": -2.793327,
+#     "longitude": 122.131681,
+#     "desc": "Drone blocker",
+#     "angle_start": 0
+# }
+
 {
-    "name": "02 EDU PARK",
+    "name": "2 Edu park IMIP",
     "serial_numb": "250002",
     "ip": "10.88.81.3",
-    "latitude": -7.79,
-    "longitude": 110.43,
-    "desc": "Drone blocker di Edu park",
+    "latitude": -2.797881,
+    "longitude": 122.141956,
+    "desc": "Drone blocker",
     "angle_start": 0
 }
 
-# {
-#     "name": "05 Terminal Utara Tsingshan",
-#     "serial_numb": "250005",
-#     "ip": "10.88.81.6",
-#     "latitude": -7.767097914728923,
-#     "longitude": 110.43166037380772,
-#     "desc": "Drone blocker di bandara",
-#     "angle_start": 0
-# }
-
-# {
-#     "name": "Runway 13 Bandara",
-#     "serial_numb": "250001",
-#     "ip": "10.88.81.2",
-#     "latitude": -7.786959801210232,
-#     "longitude": 110.4220920495705,
-#     "desc": "Drone blocker di barat",
-#     "angle_start": 0
-# }
 
 ### 2. Get All DBlockers
 GET http://10.88.81.16:8080/api/dblockers
@@ -62,7 +53,7 @@ Content-Type: application/json
 
 
 ### 5. Delete DBlocker by ID
-DELETE http://10.88.81.16:8080/api/dblockers/2
+DELETE http://10.88.81.16:8080/api/dblockers/1
 
 
 ### 6. Update DBlocker Config
@@ -85,4 +76,4 @@ Content-Type: application/json
 GET http://192.168.1.174:8080/api/dblockers/config/off/3
 
 ### 7. Turn Off All DBlocker Config B
-GET http://10.88.81.16:8080/api/dblockers/config/off/6
+GET http://10.88.81.16:8080/api/dblockers/config/off/1
