@@ -7,10 +7,18 @@
         payload?: string;
     };
 
+
+    type CurrentData = {
+        raw: number;
+        amps: number;
+    };
+
     type ParsedPayload = {
-        hallSensors: number[];
-        temperature: number;
-        slaveConnected: boolean;
+        currents: CurrentData[];
+        temperatureRaw: number;
+        temperatureCelsius: number | null;
+        digitalRaw: string;
+        digital: boolean | null;
         raw: string;
     };
 
@@ -26,8 +34,37 @@
     let status = "connecting…";
     let source: EventSource | null = null;
 
+
+    // --- MATH CONVERSIONS ---
+    const calculateTemperatureC = (rawADC: number): number | null => {
+        if (rawADC <= 0 || rawADC >= 1023) return null;
+
+        const R_FIXED = 51000.0;
+        const R0 = 100000.0;
+        const B_COEFFICIENT = 3950.0;
+        const T0 = 298.15;
+
+        const resistance = R_FIXED * (1023.0 / rawADC - 1.0);
+        let steinhart = resistance / R0;
+        steinhart = Math.log(steinhart);
+        steinhart /= B_COEFFICIENT;
+        steinhart += 1.0 / T0;
+        steinhart = 1.0 / steinhart;
+
+        return steinhart - 273.15;
+    };
+
+    const calculateCurrentA = (rawADC: number): number => {
+        const VCC = 3.3;
+        const voltage = rawADC * (VCC / 1023.0);
+        const vZero = VCC / 2.0;
+        const sensitivity = 0.0396;
+        return (voltage - vZero) / sensitivity;
+    };
+
+    // --- PAYLOAD PARSING ---
     const parseReportPayload = (payload: string): ParsedPayload | null => {
-        const [numericPart, slavePart] = payload.split("|");
+        const [numericPart, digitalPart] = payload.split("|");
         if (!numericPart) return null;
 
         const values = numericPart
@@ -35,16 +72,26 @@
             .map((item) => Number(item.trim()))
             .filter((item) => !Number.isNaN(item));
 
-        // MCU master format: hall[18],temperature|slaveConnected
-        if (values.length !== 19) return null;
+        if (values.length < 19) return null;
 
-        const slaveRaw = (slavePart ?? "").trim();
-        if (slaveRaw !== "0" && slaveRaw !== "1") return null;
+        const digitalRaw = (digitalPart ?? "").trim();
+        const digital =
+            digitalRaw === "1" ? true : digitalRaw === "0" ? false : null;
+
+        const temperatureRaw = values[18];
+
+        // Map the first 18 raw values to objects containing both raw and calculated amps
+        const currents = values.slice(0, 18).map(raw => ({
+            raw,
+            amps: calculateCurrentA(raw)
+        }));
 
         return {
-            hallSensors: values.slice(0, 18),
-            temperature: values[18],
-            slaveConnected: slaveRaw === "1",
+            currents,
+            temperatureRaw,
+            temperatureCelsius: calculateTemperatureC(temperatureRaw),
+            digitalRaw,
+            digital,
             raw: payload,
         };
     };
@@ -100,17 +147,14 @@
     $: topicEntries = Object.entries(latestByTopic).sort(([a], [b]) =>
         a.localeCompare(b),
     );
+
     $: parsedEntries = topicEntries.map(([topic, payload]) => {
         const isReportTopic = topic.endsWith("/rpt");
-        const isStatusTopic = topic.endsWith("/sta");
-
         return {
             topic,
             payload,
-            report: isReportTopic ? parseReportPayload(payload) : null,
-            status: isStatusTopic ? parseStatusPayload(payload) : null,
+            parsed: isReportTopic ? parseReportPayload(payload) : null,
             isReportTopic,
-            isStatusTopic,
         };
     });
 
@@ -137,68 +181,35 @@
         {#each parsedEntries as entry}
             <div class="topic-section">
                 <h4>@{entry.topic}</h4>
-
-                {#if entry.isReportTopic && entry.report}
-                    <table>
+                {#if entry.isReportTopic && entry.parsed}
+                    <table class="current-table">
                         <thead>
                             <tr>
-                                <th>Field</th>
-                                <th>Value</th>
+                                <th>Current #</th>
+                                <th>Raw Value</th>
+                                <th>Converted (A)</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {#each entry.report.hallSensors as value, idx}
+                            {#each entry.parsed.currents as current, idx}
                                 <tr>
-                                    <td>Hall {idx + 1}</td>
-                                    <td>{value}</td>
+                                    <td>Current {idx}</td>
+                                    <td>{current.raw}</td>
+                                    <td>{current.amps.toFixed(3)}</td>
                                 </tr>
                             {/each}
-
                             <tr>
-                                <td>Temperature (raw)</td>
-                                <td>{entry.report.temperature}</td>
-                            </tr>
-
-                            <tr>
-                                <td>Slave Connected</td>
-                                <td
-                                    >{entry.report.slaveConnected
-                                        ? "true"
-                                        : "false"}</td
-                                >
+                                <td>Temperature</td>
+                                <td>{entry.parsed.temperatureRaw}</td>
+                                <td>{entry.parsed.temperatureCelsius !== null ? entry.parsed.temperatureCelsius.toFixed(2) + ' °C' : 'N/A'}</td>
                             </tr>
                         </tbody>
                     </table>
-                {:else if entry.isStatusTopic && entry.status}
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Field</th>
-                                <th>Value</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td>Status</td>
-                                <td>{entry.status.mode}</td>
-                            </tr>
-                            {#if entry.status.mode === "ON"}
-                                <tr>
-                                    <td>Mask (Hex)</td>
-                                    <td>{entry.status.maskHex}</td>
-                                </tr>
-                                <tr>
-                                    <td>Master Bits (0-6)</td>
-                                    <td>{entry.status.masterMask}</td>
-                                </tr>
-                                <tr>
-                                    <td>Slave Bits (7-13)</td>
-                                    <td>{entry.status.slaveMask}</td>
-                                </tr>
-                            {/if}
-                        </tbody>
-                    </table>
-                {:else if entry.isReportTopic || entry.isStatusTopic}
+                    <div class="digital-info">
+                        <span>Digital Raw: {entry.parsed.digitalRaw}</span>
+                        <span>Digital: {entry.parsed.digital === null ? 'N/A' : entry.parsed.digital ? 'true' : 'false'}</span>
+                    </div>
+                {:else if entry.isReportTopic}
                     <p>Invalid payload format: {entry.payload}</p>
                 {:else}
                     <p>Raw payload: {entry.payload}</p>
@@ -234,24 +245,33 @@
         color: var(--text-primary);
     }
 
-    table {
+    table.current-table {
         width: 100%;
         border-collapse: collapse;
+        margin-bottom: 8px;
     }
 
-    th,
-    td {
+    .current-table th,
+    .current-table td {
         border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
         padding: 4px 6px;
         text-align: left;
         word-break: break-word;
     }
 
-    th {
+    .current-table th {
         background: color-mix(
             in srgb,
             var(--card-bg) 75%,
             var(--accent-cyan) 25%
         );
+    }
+
+    .digital-info {
+        font-size: 0.9em;
+        color: var(--text-secondary, #888);
+        margin-bottom: 4px;
+        display: flex;
+        gap: 1.5em;
     }
 </style>
