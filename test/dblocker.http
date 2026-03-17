@@ -13,11 +13,11 @@ Content-Type: application/json
 # }
 
 {
-    "name": "2 Edu park IMIP",
-    "serial_numb": "250002",
-    "ip": "10.88.81.3",
-    "latitude": -2.797881,
-    "longitude": 122.141956,
+    "name": "10",
+    "serial_numb": "250010",
+    "ip": "10.88.81.11",
+    "latitude": -7.7824,
+    "longitude": 110.43025660418613,
     "desc": "Drone blocker",
     "angle_start": 0
 }
@@ -53,7 +53,7 @@ Content-Type: application/json
 
 
 ### 5. Delete DBlocker by ID
-DELETE http://10.88.81.16:8080/api/dblockers/1
+DELETE http://10.88.81.16:8080/api/dblockers/6
 
 
 ### 6. Update DBlocker Config
