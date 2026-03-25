@@ -166,7 +166,12 @@ func (b *BridgeService) ResubscribeTrackedTopics() error {
 		return nil
 	}
 
-	return b.subscribeTopics(topics)
+	if err := b.subscribeTopics(topics); err != nil {
+		return err
+	}
+
+	log.Printf("Resubscribed %d MQTT bridge topics after reconnect", len(topics))
+	return nil
 }
 
 func (b *BridgeService) Topic() string {
