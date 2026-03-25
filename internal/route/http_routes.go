@@ -4,6 +4,7 @@ import (
 	handlerhttp "dblocker_control/internal/handler/http"
 	"dblocker_control/internal/infrastructure/database/repository"
 	"dblocker_control/internal/infrastructure/mqtt"
+	"dblocker_control/internal/service"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,11 +13,11 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler) {
+func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler, bridgeService *service.BridgeService) {
 
 	dblockerRepo := repository.NewDBlockerRepository(db)
 
-	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, mqttClient)
+	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, mqttClient, bridgeService)
 
 	r.GET("/events", bridgeHandler.Events)
 

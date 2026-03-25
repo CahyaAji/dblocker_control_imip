@@ -42,7 +42,7 @@ func main() {
 	//! remove this in production, only for development
 	r.Use(cors.Default())
 
-	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler)
+	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler, bridgeSvc)
 
 	log.Printf("Starting dblocker server on :%s (bridging %s)", appPort, bridgeSvc.Topic())
 	if err := r.Run(":" + appPort); err != nil {

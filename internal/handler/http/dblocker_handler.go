@@ -15,10 +15,11 @@ import (
 type DBlockerHandler struct {
 	Repo       *repository.DBlockerRepository
 	MqttClient mqtt.Client
+	Bridge     *service.BridgeService
 }
 
-func NewDBlockerHandler(repo *repository.DBlockerRepository, mqttClient mqtt.Client) *DBlockerHandler {
-	return &DBlockerHandler{Repo: repo, MqttClient: mqttClient}
+func NewDBlockerHandler(repo *repository.DBlockerRepository, mqttClient mqtt.Client, bridge *service.BridgeService) *DBlockerHandler {
+	return &DBlockerHandler{Repo: repo, MqttClient: mqttClient, Bridge: bridge}
 }
 
 func (h *DBlockerHandler) CreateDBlocker(c *gin.Context) {
@@ -36,6 +37,13 @@ func (h *DBlockerHandler) CreateDBlocker(c *gin.Context) {
 	if err := h.Repo.Create(&input); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if h.Bridge != nil {
+		if err := h.Bridge.RefreshTopics(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "dblocker created, but failed to refresh mqtt subscriptions"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"data": input})
@@ -90,6 +98,13 @@ func (h *DBlockerHandler) UpdateDBlocker(c *gin.Context) {
 		return
 	}
 
+	if h.Bridge != nil {
+		if err := h.Bridge.RefreshTopics(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "dblocker updated, but failed to refresh mqtt subscriptions"})
+			return
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": input})
 }
 
@@ -105,6 +120,13 @@ func (h *DBlockerHandler) DeleteDBlocker(c *gin.Context) {
 	if err := h.Repo.Delete(uint(id)); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	if h.Bridge != nil {
+		if err := h.Bridge.RefreshTopics(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "dblocker deleted, but failed to refresh mqtt subscriptions"})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "DBlocker deleted successfully"})
