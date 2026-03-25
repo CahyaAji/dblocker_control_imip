@@ -1,6 +1,7 @@
 <script lang="ts">
   import Map from "./lib/components/Map.svelte";
   import MsgReceiverBox from "./lib/components/MsgReceiverBox.svelte";
+  import MsgStatusBox from "./lib/components/MsgStatusBox.svelte";
   import SideMenu from "./lib/components/SideMenu.svelte";
   import { settings } from "./lib/store/configStore";
   import { startPolling, stopPolling } from "./lib/store/dblockerStore";
@@ -143,13 +144,45 @@
   </main>
 </div>
 
-<div class="dev-panel">
+<div class="dev-panel msg-1">
   <!-- For testing only -->
   <!-- <SubDemo /> -->
   <MsgReceiverBox />
 </div>
 
+<div class="dev-panel msg-2">
+  <MsgStatusBox />
+</div>
+
 <style>
+  .dev-panel {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(420px, calc(100vw - 28px));
+    overflow: auto;
+    padding: 8px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+    border: 1px solid color-mix(in srgb, var(--separator) 78%, transparent);
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(8px);
+  }
+
+  .msg-1 {
+    left: 14px;
+    bottom: 14px;
+    max-height: min(75vh, 480px);
+  }
+
+  .msg-2 {
+    left: 14px;
+    top: 100px;
+    max-height: 240px;
+  }
+
   .app-container {
     display: flex;
     flex-direction: column;
@@ -284,21 +317,5 @@
       var(--accent-blue) 50%,
       transparent 100%
     );
-  }
-
-  .dev-panel {
-    position: fixed;
-    left: 14px;
-    bottom: 14px;
-    z-index: 1000;
-    width: min(420px, calc(100vw - 28px));
-    max-height: min(75vh, 420px);
-    overflow: auto;
-    padding: 8px;
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--card-bg) 85%, transparent);
-    border: 1px solid color-mix(in srgb, var(--separator) 78%, transparent);
-    box-shadow: var(--shadow-md);
-    backdrop-filter: blur(8px);
   }
 </style>

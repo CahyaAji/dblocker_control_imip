@@ -21,14 +21,6 @@
         raw: string;
     };
 
-    type ParsedStatusPayload = {
-        mode: "OFF" | "SLEEP" | "ON";
-        maskHex?: string;
-        masterMask?: number;
-        slaveMask?: number;
-        raw: string;
-    };
-
     let latestByTopic: Record<string, string> = {};
     let status = "connecting…";
     let source: EventSource | null = null;
@@ -94,43 +86,13 @@
         };
     };
 
-    const parseStatusPayload = (
-        payload: string,
-    ): ParsedStatusPayload | null => {
-        const trimmed = payload.trim();
-
-        if (trimmed === "OFF") {
-            return { mode: "OFF", raw: payload };
-        }
-
-        if (trimmed === "SLEEP") {
-            return { mode: "SLEEP", raw: payload };
-        }
-
-        const onMatch = /^ON:([0-9A-Fa-f]{4})$/.exec(trimmed);
-        if (!onMatch) return null;
-
-        const maskHex = onMatch[1].toUpperCase();
-        const mask = Number.parseInt(maskHex, 16);
-        const masterMask = mask & 0x007f;
-        const slaveMask = (mask >> 7) & 0x007f;
-
-        return {
-            mode: "ON",
-            maskHex,
-            masterMask,
-            slaveMask,
-            raw: payload,
-        };
-    };
-
     const handleMessage = (ev: MessageEvent<string>) => {
         try {
             const data: BridgeEvent = JSON.parse(ev.data);
             const topic = data.topic?.trim();
             const payload = data.payload ?? "";
 
-            if (!topic) return;
+            if (!topic || topic.endsWith("/sta")) return;
 
             latestByTopic = {
                 ...latestByTopic,
