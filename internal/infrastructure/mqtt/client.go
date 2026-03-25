@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	paho "github.com/eclipse/paho.mqtt.golang"
@@ -16,6 +17,10 @@ type Client interface {
 	Close()
 }
 
+type OnConnectRegistrar interface {
+	AddOnConnectHandler(handler func())
+}
+
 // Message wraps the subset of MQTT message fields that handlers typically need.
 type Message struct {
 	Topic   string
@@ -26,7 +31,9 @@ type Message struct {
 type Handler func(Message)
 
 type mqttClient struct {
-	pahoClient paho.Client
+	pahoClient        paho.Client
+	onConnectMu       sync.RWMutex
+	onConnectHandlers []func()
 }
 
 func New(broker string, clientID string) (Client, error) {
@@ -34,6 +41,8 @@ func New(broker string, clientID string) (Client, error) {
 }
 
 func NewWithAuth(broker string, clientID string, username string, password string) (Client, error) {
+	mqttClient := &mqttClient{}
+
 	opts := paho.NewClientOptions()
 	opts.AddBroker(broker)
 	opts.SetClientID(clientID)
@@ -47,7 +56,7 @@ func NewWithAuth(broker string, clientID string, username string, password strin
 
 	opts.OnConnect = func(c paho.Client) {
 		log.Println("Connected to MQTT broker")
-
+		go mqttClient.fireOnConnectHandlers()
 	}
 	opts.OnConnectionLost = func(c paho.Client, err error) {
 		log.Printf("Connection lost: %v", err)
@@ -58,12 +67,33 @@ func NewWithAuth(broker string, clientID string, username string, password strin
 	}
 
 	client := paho.NewClient(opts)
+	mqttClient.pahoClient = client
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		return nil, fmt.Errorf("mqtt connect error: %w", token.Error())
 	}
 
-	return &mqttClient{pahoClient: client}, nil
+	return mqttClient, nil
 
+}
+
+func (m *mqttClient) AddOnConnectHandler(handler func()) {
+	if handler == nil {
+		return
+	}
+
+	m.onConnectMu.Lock()
+	defer m.onConnectMu.Unlock()
+	m.onConnectHandlers = append(m.onConnectHandlers, handler)
+}
+
+func (m *mqttClient) fireOnConnectHandlers() {
+	m.onConnectMu.RLock()
+	handlers := append([]func(){}, m.onConnectHandlers...)
+	m.onConnectMu.RUnlock()
+
+	for _, handler := range handlers {
+		handler()
+	}
 }
 
 func (m *mqttClient) Publish(topic string, qos byte, retained bool, payload any) error {

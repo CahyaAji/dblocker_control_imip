@@ -4,6 +4,7 @@ import (
 	"dblocker_control/internal/infrastructure/mqtt"
 	"dblocker_control/internal/models"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 )
@@ -48,11 +49,31 @@ func NewBridgeService(client mqtt.Client, reader DBlockerReader) (*BridgeService
 		broadcaster: newBroadcaster(),
 	}
 
+	if registrar, ok := client.(mqtt.OnConnectRegistrar); ok {
+		registrar.AddOnConnectHandler(func() {
+			if err := br.ResubscribeTrackedTopics(); err != nil {
+				log.Printf("Failed to resubscribe bridge topics after MQTT reconnect: %v", err)
+			}
+		})
+	}
+
 	if err := br.RefreshTopics(); err != nil {
 		return nil, err
 	}
 
 	return br, nil
+}
+
+func (b *BridgeService) subscribeTopics(topics []string) error {
+	for _, topic := range topics {
+		if err := b.client.Subscribe(topic, 0, func(msg mqtt.Message) {
+			b.broadcast(msg)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (b *BridgeService) RefreshTopics() error {
@@ -117,12 +138,8 @@ func (b *BridgeService) RefreshTopics() error {
 	}
 	b.mu.Unlock()
 
-	for _, topic := range toSubscribe {
-		if err := b.client.Subscribe(topic, 0, func(msg mqtt.Message) {
-			b.broadcast(msg)
-		}); err != nil {
-			return err
-		}
+	if err := b.subscribeTopics(toSubscribe); err != nil {
+		return err
 	}
 
 	if len(toUnsubscribe) > 0 {
@@ -135,6 +152,21 @@ func (b *BridgeService) RefreshTopics() error {
 	b.topics = nextTopics
 	b.mu.Unlock()
 	return nil
+}
+
+func (b *BridgeService) ResubscribeTrackedTopics() error {
+	b.refreshMu.Lock()
+	defer b.refreshMu.Unlock()
+
+	b.mu.RLock()
+	topics := append([]string(nil), b.topics...)
+	b.mu.RUnlock()
+
+	if len(topics) == 0 {
+		return nil
+	}
+
+	return b.subscribeTopics(topics)
 }
 
 func (b *BridgeService) Topic() string {
