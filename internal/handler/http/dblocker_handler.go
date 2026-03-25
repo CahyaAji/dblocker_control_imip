@@ -6,6 +6,7 @@ import (
 	"dblocker_control/internal/models"
 	"dblocker_control/internal/service"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -41,8 +42,9 @@ func (h *DBlockerHandler) CreateDBlocker(c *gin.Context) {
 
 	if h.Bridge != nil {
 		if err := h.Bridge.RefreshTopics(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "dblocker created, but failed to refresh mqtt subscriptions"})
-			return
+			// DB write succeeded; do not fail the request. Topics will resync on the
+			// next CRUD operation or app restart.
+			log.Printf("warn: RefreshTopics after create dblocker %d: %v", input.ID, err)
 		}
 	}
 
@@ -100,8 +102,7 @@ func (h *DBlockerHandler) UpdateDBlocker(c *gin.Context) {
 
 	if h.Bridge != nil {
 		if err := h.Bridge.RefreshTopics(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "dblocker updated, but failed to refresh mqtt subscriptions"})
-			return
+			log.Printf("warn: RefreshTopics after update dblocker %d: %v", input.ID, err)
 		}
 	}
 
@@ -124,8 +125,7 @@ func (h *DBlockerHandler) DeleteDBlocker(c *gin.Context) {
 
 	if h.Bridge != nil {
 		if err := h.Bridge.RefreshTopics(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "dblocker deleted, but failed to refresh mqtt subscriptions"})
-			return
+			log.Printf("warn: RefreshTopics after delete dblocker %d: %v", id, err)
 		}
 	}
 
