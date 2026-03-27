@@ -1,11 +1,13 @@
 <script lang="ts">
     import { slide } from "svelte/transition";
-    import type { DBlockerConfig } from "../store/dblockerStore";
+    import type { DBlockerConfig, SectorCurrents } from "../store/dblockerStore";
 
     export let isExpanded = false;
     export let showAdvancedActions = false;
     export let liveConfig: DBlockerConfig[] = [];
     export let editableConfig: DBlockerConfig[] = [];
+    export let liveSectorCurrents: SectorCurrents[] | null = null;
+    export let savedSectorCurrents: SectorCurrents[] | null = null;
 
     export let onToggleSignal: (
         sectorIndex: number,
@@ -38,6 +40,14 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
+                            {#if sectorCfg.signal_ctrl && (savedSectorCurrents || liveSectorCurrents)}
+                                <div class="debug-current">
+                                    RC1 S:{savedSectorCurrents?.[index]?.ctrl1.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[index]?.ctrl1.toFixed(2) ?? '—'}
+                                </div>
+                                <div class="debug-current">
+                                    RC2 S:{savedSectorCurrents?.[index]?.ctrl2.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[index]?.ctrl2.toFixed(2) ?? '—'}
+                                </div>
+                            {/if}
                             <div class="control-row">
                                 <div class="control-label">Block GPS</div>
                                 <label class="switch">
@@ -50,6 +60,11 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
+                            {#if sectorCfg.signal_gps && (savedSectorCurrents || liveSectorCurrents)}
+                                <div class="debug-current">
+                                    GPS S:{savedSectorCurrents?.[index]?.gps.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[index]?.gps.toFixed(2) ?? '—'}
+                                </div>
+                            {/if}
                         </div>
                     {/each}
                 </div>
@@ -78,6 +93,14 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
+                            {#if sectorCfg.signal_ctrl && (savedSectorCurrents || liveSectorCurrents)}
+                                <div class="debug-current">
+                                    RC1 S:{savedSectorCurrents?.[sectorIndex]?.ctrl1.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[sectorIndex]?.ctrl1.toFixed(2) ?? '—'}
+                                </div>
+                                <div class="debug-current">
+                                    RC2 S:{savedSectorCurrents?.[sectorIndex]?.ctrl2.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[sectorIndex]?.ctrl2.toFixed(2) ?? '—'}
+                                </div>
+                            {/if}
                             <div class="control-row">
                                 <div class="control-label">Block GPS</div>
                                 <label class="switch">
@@ -93,6 +116,11 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
+                            {#if sectorCfg.signal_gps && (savedSectorCurrents || liveSectorCurrents)}
+                                <div class="debug-current">
+                                    GPS S:{savedSectorCurrents?.[sectorIndex]?.gps.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[sectorIndex]?.gps.toFixed(2) ?? '—'}
+                                </div>
+                            {/if}
                         </div>
                     {/each}
                 </div>
@@ -230,6 +258,16 @@
         font-weight: 700;
         color: var(--text-secondary);
         letter-spacing: 0.02em;
+    }
+
+    .debug-current {
+        font-size: 10px;
+        font-family: monospace;
+        color: var(--text-secondary);
+        padding: 1px 4px;
+        background: color-mix(in srgb, var(--bg-elevated) 40%, transparent);
+        border-radius: 4px;
+        opacity: 0.85;
     }
 
     .sector :global(.switch) {

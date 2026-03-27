@@ -7,6 +7,7 @@
   import { startPolling, stopPolling } from "./lib/store/dblockerStore";
 
   let isResizing = $state(false);
+  let activeMsgTab = $state<"receiver" | "status">("receiver");
 
   $effect(() => {
     startPolling(2000);
@@ -144,14 +145,39 @@
   </main>
 </div>
 
-<div class="dev-panel msg-1">
-  <!-- For testing only -->
-  <!-- <SubDemo /> -->
-  <MsgReceiverBox />
-</div>
+<div class="dev-panel msg-panel" role="region" aria-label="Message panel">
+  <div class="msg-tabs" role="tablist" aria-label="Message tabs">
+    <button
+      type="button"
+      class="msg-tab"
+      class:active={activeMsgTab === "receiver"}
+      role="tab"
+      aria-selected={activeMsgTab === "receiver"}
+      onclick={() => (activeMsgTab = "receiver")}
+    >
+      Receiver
+    </button>
+    <button
+      type="button"
+      class="msg-tab"
+      class:active={activeMsgTab === "status"}
+      role="tab"
+      aria-selected={activeMsgTab === "status"}
+      onclick={() => (activeMsgTab = "status")}
+    >
+      Status
+    </button>
+  </div>
 
-<div class="dev-panel msg-2">
-  <MsgStatusBox />
+  <div class="msg-tab-content">
+    {#if activeMsgTab === "receiver"}
+      <!-- For testing only -->
+      <!-- <SubDemo /> -->
+      <MsgReceiverBox />
+    {:else}
+      <MsgStatusBox />
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -171,16 +197,45 @@
     backdrop-filter: blur(8px);
   }
 
-  .msg-1 {
+  .msg-panel {
     left: 14px;
     bottom: 14px;
     max-height: min(75vh, 480px);
   }
 
-  .msg-2 {
-    left: 14px;
-    top: 100px;
-    max-height: 240px;
+  .msg-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .msg-tab {
+    border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
+    background: color-mix(in srgb, var(--card-bg) 88%, var(--bg-elevated) 12%);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .msg-tab:hover {
+    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--accent-blue) 38%, transparent);
+  }
+
+  .msg-tab.active {
+    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--accent-cyan) 60%, transparent);
+    background: color-mix(in srgb, var(--accent-cyan) 16%, var(--card-bg) 84%);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in srgb, var(--accent-cyan) 24%, transparent);
+  }
+
+  .msg-tab-content {
+    overflow: auto;
+    min-height: 0;
   }
 
   .app-container {

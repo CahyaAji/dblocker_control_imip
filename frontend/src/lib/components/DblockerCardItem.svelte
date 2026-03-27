@@ -1,10 +1,103 @@
 <script lang="ts">
+    import { onMount, onDestroy } from "svelte";
     import DblockerCardActions from "./DblockerCardActions.svelte";
     import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
     import type { DBlocker, DBlockerConfig } from "../store/dblockerStore";
     import { updateDBlockerConfig } from "../store/dblockerStore";
+    import { bridgeStore, subscribeBridge, unsubscribeBridge } from "../store/bridgeStore";
+    import type { SectorCurrents } from "../store/dblockerStore";
+    import { API_BASE } from "../utils/api";
+
+    const calculateCurrentA = (rawADC: number): number => {
+        const VCC = 3.3;
+        const voltage = rawADC * (VCC / 1023.0);
+        const vZero = VCC / 2.0;
+        const sensitivity = 0.0396;
+        return (voltage - vZero) / sensitivity;
+    };
+
+    const calculateTemperatureC = (rawADC: number): number | null => {
+        if (rawADC <= 0 || rawADC >= 1023) return null;
+        const R_FIXED = 51000.0;
+        const R0 = 100000.0;
+        const B_COEFFICIENT = 3950.0;
+        const T0 = 298.15;
+        const resistance = R_FIXED * (1023.0 / rawADC - 1.0);
+        let steinhart = resistance / R0;
+        steinhart = Math.log(steinhart);
+        steinhart /= B_COEFFICIENT;
+        steinhart += 1.0 / T0;
+        steinhart = 1.0 / steinhart;
+        return steinhart - 273.15;
+    };
+
+    type ParsedRpt = {
+        sectors: SectorCurrents[];
+        temperatureC: number | null;
+    };
+
+    const parseRpt = (payload: string): ParsedRpt | null => {
+        const [numericPart] = payload.split("|");
+        if (!numericPart) return null;
+
+        const values = numericPart
+            .split(",")
+            .map((v) => Number(v.trim()))
+            .filter((v) => !Number.isNaN(v));
+
+        if (values.length < 19) return null;
+
+        const sectors = Array.from({ length: 6 }, (_, s) => ({
+            ctrl1: calculateCurrentA(values[s * 3]),
+            ctrl2: calculateCurrentA(values[s * 3 + 1]),
+            gps: calculateCurrentA(values[s * 3 + 2]),
+        }));
+
+        return { sectors, temperatureC: calculateTemperatureC(values[18]) };
+    };
 
     export let dblocker: DBlocker;
+
+    $: staTopic = `dbl/${dblocker.serial_numb}/sta`;
+    $: staPayload = $bridgeStore[staTopic] ?? null;
+    $: staLabel =
+        staPayload === null ? '—' :
+        staPayload === 'OFF' ? 'OFFLINE' :
+        staPayload === 'SLEEP' ? 'SLEEP' :
+        staPayload.startsWith('ON') ? 'ONLINE' : staPayload;
+
+    // --- /rpt topic: live current sensor data ---
+    $: rptTopic = `dbl/${dblocker.serial_numb}/rpt`;
+    $: rptPayload = $bridgeStore[rptTopic] ?? null;
+    $: parsedRpt = rptPayload ? parseRpt(rptPayload) : null;
+    $: liveSectorCurrents = parsedRpt?.sectors ?? null;
+    $: liveTemperatureC = parsedRpt?.temperatureC ?? null;
+
+    // Snapshot taken right before Apply
+    let savedSectorCurrents: SectorCurrents[] | null = null;
+
+    // --- Monitor status from backend ---
+    let monitorErrors: string[] = [];
+    let warningState: "normal" | "error" = "normal";
+    let monitorPollTimer: ReturnType<typeof setInterval> | undefined;
+
+    async function pollMonitorStatus() {
+        try {
+            const res = await fetch(`${API_BASE}/api/dblockers/monitor`);
+            if (!res.ok) return;
+            const json = await res.json();
+            const allStatus: Record<string, { errors: string[] }> = json.data ?? {};
+            const status = allStatus[dblocker.serial_numb];
+            monitorErrors = status?.errors ?? [];
+            warningState = monitorErrors.length > 0 ? "error" : "normal";
+        } catch {
+            // Ignore fetch errors
+        }
+    }
+
+    $: warningTitle = warningState === "error"
+        ? `Error: ${monitorErrors.join(', ')} current lower than expected`
+        : "Normal";
 
     let isExpanded = false;
     let showAdvancedActions = false;
@@ -59,8 +152,15 @@
 
     async function applyConfig() {
         try {
+            // Snapshot live currents for debug display
+            savedSectorCurrents = liveSectorCurrents
+                ? liveSectorCurrents.map((c) => ({ ctrl1: c.ctrl1, ctrl2: c.ctrl2, gps: c.gps }))
+                : null;
+
             waitingForBackend = true;
             await updateDBlockerConfig(dblocker.id, editableConfig);
+            // Backend snapshots currents at config-apply; start polling for monitor errors
+            pollMonitorStatus();
             // Wait for backend/store to match our local config
             const checkMatch = () => {
                 const isMatch =
@@ -86,13 +186,44 @@
             action,
         });
     }
+
+    onMount(() => {
+        subscribeBridge();
+        pollMonitorStatus();
+        monitorPollTimer = setInterval(pollMonitorStatus, 3000);
+    });
+    onDestroy(() => {
+        unsubscribeBridge();
+        if (monitorPollTimer) clearInterval(monitorPollTimer);
+    });
 </script>
 
 <div class="card" class:expanded={isExpanded}>
     <div class="card-header">
         <div class="title-wrap">
-            <div class="card-title">{dblocker.name}</div>
-            <div class="card-meta">ini diisi online/offline</div>
+            <div class="title-meta-wrap">
+                <div class="card-title">{dblocker.name}</div>
+                <span class="title-separator" aria-hidden="true">|</span>
+                <div class="card-meta" class:status-on={staPayload?.startsWith('ON')} class:status-off={staPayload === 'OFF'} class:status-sleep={staPayload === 'SLEEP'}>
+                    {staLabel}{#if liveTemperatureC !== null} | {liveTemperatureC.toFixed(1)}°C{/if}
+                </div>
+            </div>
+            <div
+                class="warning-indicator"
+                class:is-error={warningState === "error"}
+                title={warningTitle}
+                aria-label={warningTitle}
+            >
+                {#if warningState === "error"}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3L2.6 19.2A1.2 1.2 0 003.64 21h16.72a1.2 1.2 0 001.04-1.8L12 3zm1 13h-2v-2h2v2zm0-4h-2V8h2v4z" />
+                    </svg>
+                {:else}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm4.2 7.3l-5.03 6.1a1 1 0 01-1.48.07l-2.2-2.2a1 1 0 011.41-1.42l1.42 1.43 4.25-5.15a1 1 0 011.54 1.27z" />
+                    </svg>
+                {/if}
+            </div>
         </div>
     </div>
     <DblockerSectorGrid
@@ -100,6 +231,8 @@
         {showAdvancedActions}
         {liveConfig}
         {editableConfig}
+        {liveSectorCurrents}
+        {savedSectorCurrents}
         onToggleSignal={toggleEditableSignal}
         onAdvancedAction={handleAdvancedAction}
     />
@@ -153,24 +286,74 @@
     .title-wrap {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         width: 100%;
+        gap: 10px;
+    }
+
+    .title-meta-wrap {
+        display: flex;
+        align-items: baseline;
         gap: 8px;
+        min-width: 0;
     }
 
     .card-title {
         font-size: 15px;
         font-weight: 700;
+        line-height: 1;
         color: var(--text-primary);
+    }
+
+    .title-separator {
+        font-size: 12px;
+        line-height: 1;
+        color: var(--text-secondary);
+        opacity: 0.7;
     }
 
     .card-meta {
         font-size: 11px;
         font-weight: 600;
+        line-height: 1;
         color: var(--text-secondary);
     }
 
-    .card-meta.online {
-        color: var(--accent-green);
+    .card-meta.status-on {
+        color: var(--accent-green, #4caf50);
+    }
+
+    .card-meta.status-off {
+        color: var(--accent-red, #f44336);
+    }
+
+    .card-meta.status-sleep {
+        color: var(--accent-yellow, #ff9800);
+    }
+
+    .warning-indicator {
+        width: 20px;
+        height: 20px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: auto;
+        border-radius: 999px;
+        color: var(--accent-green, #2e7d32);
+        background: color-mix(in srgb, var(--accent-green, #2e7d32) 14%, white 86%);
+        border: 1px solid color-mix(in srgb, var(--accent-green, #2e7d32) 40%, transparent 60%);
+        flex: 0 0 auto;
+    }
+
+    .warning-indicator.is-error {
+        color: var(--accent-red, #d32f2f);
+        background: color-mix(in srgb, var(--accent-red, #d32f2f) 14%, white 86%);
+        border-color: color-mix(in srgb, var(--accent-red, #d32f2f) 40%, transparent 60%);
+    }
+
+    .warning-indicator svg {
+        width: 14px;
+        height: 14px;
+        fill: currentColor;
     }
 </style>
