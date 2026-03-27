@@ -116,7 +116,11 @@ void generateFakeSensors() {
   // Master sensors (0-8): 512-580 when OFF, 550-620 when any outPins[0]-[5] ON
   bool masterOn = isAnyMasterOutputOn();
   for (int i = 0; i < 9; i++) {
-    allHallSensors[i] = masterOn ? fakeRandom(550, 620) : fakeRandom(512, 580);
+    if (i == 3) {
+      allHallSensors[i] = masterOn ? fakeRandom(512, 580) : fakeRandom(512, 580);
+    } else {
+      allHallSensors[i] = masterOn ? fakeRandom(550, 620) : fakeRandom(512, 580);
+    }
   }
   // Slave sensors (9-17): same logic based on slave output state
   bool slaveOn = isAnySlaveOutputOn();
