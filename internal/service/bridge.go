@@ -16,13 +16,15 @@ const liveChannelBuf = 64
 
 // BridgeService subscribes to MQTT and fans messages to subscribers.
 type BridgeService struct {
-	mu          sync.RWMutex // guards topics and lastByTopic
-	refreshMu   sync.Mutex   // serializes concurrent RefreshTopics calls
-	client      mqtt.Client
-	reader      DBlockerReader
-	topics      []string
-	lastByTopic map[string]mqtt.Message // only /sta topics; one entry per serial
-	broadcaster *broadcaster
+	mu              sync.RWMutex // guards topics and lastByTopic
+	refreshMu       sync.Mutex   // serializes concurrent RefreshTopics calls
+	client          mqtt.Client
+	reader          DBlockerReader
+	topics          []string
+	lastByTopic     map[string]mqtt.Message // only /sta topics; one entry per serial
+	lastRptBySerial map[string]string       // latest /rpt payload per serial
+	broadcaster     *broadcaster
+	monitor         *CurrentMonitorService
 }
 
 type broadcaster struct {
@@ -40,13 +42,15 @@ type DBlockerReader interface {
 
 // NewBridgeService wires the MQTT subscription to the broadcaster.
 
-func NewBridgeService(client mqtt.Client, reader DBlockerReader) (*BridgeService, error) {
+func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *CurrentMonitorService) (*BridgeService, error) {
 	br := &BridgeService{
-		client:      client,
-		reader:      reader,
-		topics:      make([]string, 0),
-		lastByTopic: make(map[string]mqtt.Message),
-		broadcaster: newBroadcaster(),
+		client:          client,
+		reader:          reader,
+		topics:          make([]string, 0),
+		lastByTopic:     make(map[string]mqtt.Message),
+		lastRptBySerial: make(map[string]string),
+		broadcaster:     newBroadcaster(),
+		monitor:         monitor,
 	}
 
 	if registrar, ok := client.(mqtt.OnConnectRegistrar); ok {
@@ -197,6 +201,18 @@ func (b *BridgeService) Snapshot() []mqtt.Message {
 	return msgs
 }
 
+// Monitor returns the current monitor service.
+func (b *BridgeService) Monitor() *CurrentMonitorService {
+	return b.monitor
+}
+
+// LastRpt returns the latest /rpt payload for a serial, or empty string if none.
+func (b *BridgeService) LastRpt(serial string) string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return b.lastRptBySerial[serial]
+}
+
 // Subscribe returns a buffered channel that receives live MQTT messages.
 // Snapshot replay bypasses this channel, so the buffer only needs to
 // absorb short live-message bursts; see liveChannelBuf.
@@ -222,6 +238,19 @@ func (b *BridgeService) broadcast(msg mqtt.Message) {
 		b.mu.Lock()
 		b.lastByTopic[msg.Topic] = msg
 		b.mu.Unlock()
+	}
+
+	// Feed /rpt messages to the current monitor
+	if strings.HasSuffix(msg.Topic, "/rpt") && b.monitor != nil {
+		// Extract serial from topic: dbl/{serial}/rpt
+		parts := strings.SplitN(msg.Topic, "/", 3)
+		if len(parts) == 3 {
+			serial := parts[1]
+			b.mu.Lock()
+			b.lastRptBySerial[serial] = string(msg.Payload)
+			b.mu.Unlock()
+			b.monitor.HandleRpt(serial, string(msg.Payload))
+		}
 	}
 
 	b.broadcaster.mu.Lock()

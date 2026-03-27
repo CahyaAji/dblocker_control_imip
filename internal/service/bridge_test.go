@@ -69,7 +69,7 @@ func TestNewBridgeServiceResubscribesTrackedTopicsOnReconnect(t *testing.T) {
 	client := &fakeMQTTClient{}
 	reader := fakeDBlockerReader{dblockers: []models.DBlocker{{SerialNumb: "250001"}}}
 
-	bridge, err := NewBridgeService(client, reader)
+	bridge, err := NewBridgeService(client, reader, NewCurrentMonitorService())
 	if err != nil {
 		t.Fatalf("NewBridgeService() error = %v", err)
 	}

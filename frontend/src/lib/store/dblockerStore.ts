@@ -6,6 +6,12 @@ export interface DBlockerConfig {
     signal_gps: boolean;
 }
 
+export interface SectorCurrents {
+    ctrl1: number;
+    ctrl2: number;
+    gps: number;
+}
+
 export interface DBlocker {
     id: number;
     name: string;

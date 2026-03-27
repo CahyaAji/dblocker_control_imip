@@ -30,6 +30,7 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.PUT("/dblockers/:id", dblockerHandler.UpdateDBlocker)
 	api.PUT("/dblockers/config", dblockerHandler.UpdateDBlockerConfig)
 	api.GET("/dblockers/config/off/:id", dblockerHandler.TurnOffAllDBlockerConfig)
+	api.GET("/dblockers/monitor", dblockerHandler.GetMonitorStatus)
 	api.DELETE("/dblockers/:id", dblockerHandler.DeleteDBlocker)
 
 	//! make sure frontend is built first: npm run build (inside frontend/)

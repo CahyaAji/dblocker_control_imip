@@ -152,6 +152,21 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 
 	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
 
+	// Snapshot current readings before sending the new config
+	if h.Bridge != nil && h.Bridge.Monitor() != nil {
+		rptPayload := h.Bridge.LastRpt(dblocker.SerialNumb)
+		if rptPayload != "" {
+			cfgSlice := make([]service.SectorConfig, 6)
+			for i := 0; i < 6; i++ {
+				cfgSlice[i] = service.SectorConfig{
+					Ctrl: input.Config[i].SignalCtrl,
+					GPS:  input.Config[i].SignalGPS,
+				}
+			}
+			h.Bridge.Monitor().Snapshot(dblocker.SerialNumb, rptPayload, cfgSlice)
+		}
+	}
+
 	bitmaskPayload, err := service.DBlockerConfigToBitmask(
 		input.Config[:],
 		true,
@@ -239,4 +254,14 @@ func (h *DBlockerHandler) TurnOffAllDBlockerConfig(c *gin.Context) {
 			"config": allOffConfig,
 		},
 	})
+}
+
+// GetMonitorStatus returns the current monitor errors for all dblockers.
+func (h *DBlockerHandler) GetMonitorStatus(c *gin.Context) {
+	if h.Bridge == nil || h.Bridge.Monitor() == nil {
+		c.JSON(http.StatusOK, gin.H{"data": map[string]any{}})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": h.Bridge.Monitor().StatusAll()})
 }
