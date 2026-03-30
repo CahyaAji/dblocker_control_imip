@@ -4,6 +4,7 @@ import (
 	handlerhttp "dblocker_control/internal/handler/http"
 	"dblocker_control/internal/infrastructure/database/repository"
 	"dblocker_control/internal/infrastructure/mqtt"
+	"dblocker_control/internal/middleware"
 	"dblocker_control/internal/service"
 	"net/http"
 	"os"
@@ -13,15 +14,31 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler, bridgeService *service.BridgeService) {
+func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler, bridgeService *service.BridgeService, authService *service.AuthService) {
 
 	dblockerRepo := repository.NewDBlockerRepository(db)
 
 	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, mqttClient, bridgeService)
+	authHandler := handlerhttp.NewAuthHandler(authService)
 
-	r.GET("/events", bridgeHandler.Events)
+	// Public routes
+	r.POST("/api/auth/login", authHandler.Login)
+
+	// SSE - protected
+	r.GET("/events", middleware.AuthRequired(authService), bridgeHandler.Events)
 
 	api := r.Group("/api")
+	api.Use(middleware.AuthRequired(authService))
+
+	// Auth
+	api.GET("/auth/me", authHandler.Me)
+
+	// User management - admin only
+	admin := api.Group("/users")
+	admin.Use(middleware.AdminRequired())
+	admin.POST("", authHandler.CreateUser)
+	admin.GET("", authHandler.ListUsers)
+	admin.DELETE("/:id", authHandler.DeleteUser)
 
 	// DBlockers
 	api.POST("/dblockers", dblockerHandler.CreateDBlocker)
