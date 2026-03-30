@@ -8,7 +8,7 @@ Content-Type: application/json
     "ip": "10.88.81.2",
     "latitude": -2.793327,
     "longitude": 122.131681,
-    "desc": "Drone blocker",
+    "desc": "Blocker 1 Runway 13 Bandara",
     "angle_start": 0
 }
 
@@ -18,7 +18,7 @@ Content-Type: application/json
 #     "ip": "10.88.81.3",
 #     "latitude": -2.797881,
 #     "longitude": 122.141956,
-#     "desc": "Drone blocker di Edu Park IMIP",
+#     "desc": "Blocker 2 Edu Park IMIP",
 #     "angle_start": 0
 # }
 
@@ -28,9 +28,80 @@ Content-Type: application/json
 #     "ip": "10.88.81.4",
 #     "latitude": -2.803150,
 #     "longitude": 122.136204,
-#     "desc": "Drone blocker di Guest House Bandara",
+#     "desc": "Blocker 3 Guest House Bandara",
 #     "angle_start": 0
 # }
+
+# {
+#     "name": "4 Jalan Hauling CTLI",
+#     "serial_numb": "250004",
+#     "ip": "10.88.81.5",
+#     "latitude": -2.820297,
+#     "longitude": 122.128276,
+#     "desc": "Blocker 4 Jalan Hauling CTLI",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "5 Terminal Utama Tsingsan",
+#     "serial_numb": "250005",
+#     "ip": "10.88.81.6",
+#     "latitude": -2.808731,
+#     "longitude": 122.147636,
+#     "desc": "Blocker 5 Terminal Utama Tsingsan",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "6 Runway 31 Bandara",
+#     "serial_numb": "250006",
+#     "ip": "10.88.81.7",
+#     "latitude": -2.805106,
+#     "longitude": 122.150056,
+#     "desc": "Blocker 6 Runway 31 Bandara",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "7 Jetty Pulau",
+#     "serial_numb": "250007",
+#     "ip": "10.88.81.8",
+#     "latitude": -2.815995,
+#     "longitude": 122.164625,
+#     "desc": "Blocker 7 Jetty Pulau",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "8 DSI",
+#     "serial_numb": "250008",
+#     "ip": "10.88.81.9",
+#     "latitude": -2.836170,
+#     "longitude": 122.184159,
+#     "desc": "Blocker 8 DSI",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "9 Jetty Labota",
+#     "serial_numb": "250009",
+#     "ip": "10.88.81.10",
+#     "latitude": -2.855143,
+#     "longitude": 122.182330,
+#     "desc": "Blocker 9 Jetty Labota",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "10 Kinrui",
+#     "serial_numb": "250010",
+#     "ip": "10.88.81.11",
+#     "latitude": -2.879332,
+#     "longitude": 122.172372,
+#     "desc": "Blocker 10 Kinrui",
+#     "angle_start": 0
+# }
+
 
 ### 2. Get All DBlockers
 GET http://localhost:8080/api/dblockers
