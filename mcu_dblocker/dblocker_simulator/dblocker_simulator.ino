@@ -26,9 +26,9 @@ uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 // Config ========================
 // EDIT PER CONTROLLER ========================
-const char controller_id[] = "250001";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
-IPAddress ip(10, 88, 81, 2);
+const char controller_id[] = "250003";
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x03 };
+IPAddress ip(10, 88, 81, 4);
 
 // --- SECURITY SETTINGS ---
 const char UDP_SECRET[] = "p!ml_3rUc35";
@@ -116,8 +116,10 @@ void generateFakeSensors() {
   // Master sensors (0-8): 512-580 when OFF, 550-620 when any outPins[0]-[5] ON
   bool masterOn = isAnyMasterOutputOn();
   for (int i = 0; i < 9; i++) {
-    if (i == 3) {
-      allHallSensors[i] = masterOn ? fakeRandom(512, 580) : fakeRandom(512, 580);
+    if (i == 0) {
+      allHallSensors[i] =  masterOn ? 513 : 514;
+    } else if (i == 11) {
+      allHallSensors[i] = fakeRandom(512, 580);
     } else {
       allHallSensors[i] = masterOn ? fakeRandom(550, 620) : fakeRandom(512, 580);
     }
