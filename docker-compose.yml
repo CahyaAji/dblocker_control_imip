@@ -20,8 +20,24 @@ services:
       DB_NAME: ${DB_NAME:-dblocker-db}
       DB_SSLMODE: ${DB_SSLMODE:-disable}
       DB_TIMEZONE: ${DB_TIMEZONE:-UTC}
+      JWT_SECRET: ${JWT_SECRET:-}
+      API_KEY: ${API_KEY:-}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
     ports:
       - "8080:8080"
+
+  assist:
+    container_name: dblocker-assist-app
+    build:
+      context: .
+      dockerfile: Dockerfile.assist
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      API_KEY: ${API_KEY:-}
+      BACKEND_URL: http://dblocker-app:8080
 
   mosquitto:
     container_name: dblocker-mqtt
