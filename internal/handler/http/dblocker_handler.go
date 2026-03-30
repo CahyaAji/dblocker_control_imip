@@ -265,3 +265,82 @@ func (h *DBlockerHandler) GetMonitorStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"data": h.Bridge.Monitor().StatusAll()})
 }
+
+func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	dblocker, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	if len(dblocker.PresetConfig) != 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "preset config not set for this dblocker"})
+		return
+	}
+
+	if err := h.Repo.UpdateConfig(uint(id), dblocker.PresetConfig); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
+
+	bitmaskPayload, err := service.DBlockerConfigToBitmask(
+		dblocker.PresetConfig,
+		true,
+		true,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	payload := []byte{
+		byte(bitmaskPayload >> 8),
+		byte(bitmaskPayload),
+	}
+
+	if err := h.MqttClient.Publish(topic, 1, true, payload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish to mqtt"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Preset ON config applied successfully",
+		"data": gin.H{
+			"id":     uint(id),
+			"config": dblocker.PresetConfig,
+		},
+	})
+}
+
+func (h *DBlockerHandler) UpdatePresetConfig(c *gin.Context) {
+	var input models.DBlockerConfigUpdate
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := h.Repo.FindByID(input.ID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	if err := h.Repo.UpdatePresetConfig(input.ID, input.Config[:]); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Preset config saved successfully",
+		"data":    input,
+	})
+}

@@ -4,8 +4,11 @@
     export let isExpanded = false;
     export let canReadLastState = false;
     export let showAdvancedActions = false;
+    export let hasPreset = false;
     export let onReadLastState: () => void;
     export let onApply: () => void;
+    export let onPresetOn: () => void;
+    export let onOffAll: () => void;
     export let onToggleAdvanced: () => void;
     export let onToggleExpanded: () => void;
 </script>
@@ -25,6 +28,17 @@
                 Apply
             </button>
             <button
+                class="detail-btn"
+                type="button"
+                disabled={!hasPreset}
+                on:click={onPresetOn}
+            >
+                Preset ON
+            </button>
+            <button class="detail-btn" type="button" on:click={onOffAll}>
+                OFF ALL
+            </button>
+            <button
                 class="advance-btn"
                 type="button"
                 on:click={onToggleAdvanced}
@@ -40,6 +54,7 @@
             >
                 Show Less
             </button>
+            
         </div>
     {:else}
         <div class="collapsed-action" transition:slide={{ duration: 300 }}>
@@ -150,6 +165,11 @@
     }
 
     .reload-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .detail-btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
     }

@@ -21,6 +21,7 @@ export interface DBlocker {
     desc: string;
     angle_start: number;
     config: DBlockerConfig[];
+    preset_config: DBlockerConfig[] | null;
 }
 
 // --- STORE ---
@@ -136,5 +137,43 @@ export async function switchSignal(
         }));
 
         alert("Failed to update signal. Check connection.");
+    }
+}
+
+export async function turnOffAll(blockerId: number) {
+    try {
+        const res = await fetch(`${API_BASE}/api/dblockers/config/off/${blockerId}`);
+        if (!res.ok) throw new Error('Failed to turn off all');
+        await fetchDBlockers();
+    } catch (err) {
+        console.error('Failed to turn off all:', err);
+        alert('Failed to turn off all. Check connection.');
+    }
+}
+
+export async function presetOn(blockerId: number) {
+    try {
+        const res = await fetch(`${API_BASE}/api/dblockers/config/preset/${blockerId}`);
+        if (!res.ok) throw new Error('Failed to apply preset ON');
+        await fetchDBlockers();
+    } catch (err) {
+        console.error('Failed to apply preset ON:', err);
+        alert('Failed to apply preset ON. Check connection.');
+    }
+}
+
+export async function updatePresetConfig(blockerId: number, config: DBlockerConfig[]) {
+    try {
+        const payload = { id: blockerId, config };
+        const res = await fetch(`${API_BASE}/api/dblockers/preset`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Failed to save preset config');
+        await fetchDBlockers();
+    } catch (err) {
+        console.error('Failed to save preset config:', err);
+        alert('Failed to save preset config. Check connection.');
     }
 }

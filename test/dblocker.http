@@ -2,15 +2,15 @@
 POST http://localhost:8080/api/dblockers
 Content-Type: application/json
 
-# {
-#     "name": "1 Runway 13 Bandara",
-#     "serial_numb": "250001",
-#     "ip": "10.88.81.2",
-#     "latitude": -2.793327,
-#     "longitude": 122.131681,
-#     "desc": "Drone blocker",
-#     "angle_start": 0
-# }
+{
+    "name": "1 Runway 13 Bandara",
+    "serial_numb": "250001",
+    "ip": "10.88.81.2",
+    "latitude": -2.793327,
+    "longitude": 122.131681,
+    "desc": "Drone blocker",
+    "angle_start": 0
+}
 
 # {
 #     "name": "2 Edu Park IMIP",
@@ -22,15 +22,15 @@ Content-Type: application/json
 #     "angle_start": 0
 # }
 
-{
-    "name": "3 Guest House Bandara",
-    "serial_numb": "250003",
-    "ip": "10.88.81.4",
-    "latitude": -2.803150,
-    "longitude": 122.136204,
-    "desc": "Drone blocker di Guest House Bandara",
-    "angle_start": 0
-}
+# {
+#     "name": "3 Guest House Bandara",
+#     "serial_numb": "250003",
+#     "ip": "10.88.81.4",
+#     "latitude": -2.803150,
+#     "longitude": 122.136204,
+#     "desc": "Drone blocker di Guest House Bandara",
+#     "angle_start": 0
+# }
 
 ### 2. Get All DBlockers
 GET http://localhost:8080/api/dblockers
@@ -70,7 +70,7 @@ PUT http://localhost:8080/api/dblockers/config
 Content-Type: application/json
 
 {
-    "id": 4,
+    "id": 6,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
@@ -86,3 +86,22 @@ GET http://192.168.1.174:8080/api/dblockers/config/off/3
 
 ### 7. Turn Off All DBlocker Config B
 GET http://10.88.81.16:8080/api/dblockers/config/off/1
+
+### 8. Save Preset Config (store preset ON state for a dblocker)
+PUT http://localhost:8080/api/dblockers/preset
+Content-Type: application/json
+
+{
+    "id": 6,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": true}
+    ]
+}
+
+### 9. Apply Preset ON (publish saved preset config to device via MQTT)
+GET http://localhost:8080/api/dblockers/config/preset/6

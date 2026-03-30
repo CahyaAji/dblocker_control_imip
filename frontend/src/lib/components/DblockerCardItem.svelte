@@ -3,7 +3,7 @@
     import DblockerCardActions from "./DblockerCardActions.svelte";
     import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
     import type { DBlocker, DBlockerConfig } from "../store/dblockerStore";
-    import { updateDBlockerConfig } from "../store/dblockerStore";
+    import { updateDBlockerConfig, turnOffAll, presetOn } from "../store/dblockerStore";
     import { bridgeStore, subscribeBridge, unsubscribeBridge } from "../store/bridgeStore";
     import type { SectorCurrents } from "../store/dblockerStore";
     import { API_BASE } from "../utils/api";
@@ -187,6 +187,14 @@
         });
     }
 
+    async function handleOffAll() {
+        await turnOffAll(dblocker.id);
+    }
+
+    async function handlePresetOn() {
+        await presetOn(dblocker.id);
+    }
+
     onMount(() => {
         subscribeBridge();
         pollMonitorStatus();
@@ -241,8 +249,11 @@
         {isExpanded}
         {canReadLastState}
         {showAdvancedActions}
+        hasPreset={Array.isArray(dblocker.preset_config) && dblocker.preset_config.length === 6}
         onReadLastState={reloadFromLatest}
         onApply={applyConfig}
+        onPresetOn={handlePresetOn}
+        onOffAll={handleOffAll}
         onToggleAdvanced={toggleAdvanced}
         onToggleExpanded={toggleExpanded}
     />

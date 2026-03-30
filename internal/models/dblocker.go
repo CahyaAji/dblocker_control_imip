@@ -6,15 +6,16 @@ type DBlockerConfig struct {
 }
 
 type DBlocker struct {
-	ID         uint             `gorm:"primaryKey" json:"id"`
-	Name       string           `json:"name" binding:"required"`
-	SerialNumb string           `json:"serial_numb" binding:"required"`
-	IP         string           `json:"ip" binding:"required"`
-	Lat        float64          `json:"latitude" binding:"required"`
-	Lng        float64          `json:"longitude" binding:"required"`
-	Desc       string           `json:"desc"`
-	AngleStart int              `json:"angle_start" default:"0"`
-	Config     []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config"`
+	ID           uint             `gorm:"primaryKey" json:"id"`
+	Name         string           `json:"name" binding:"required"`
+	SerialNumb   string           `json:"serial_numb" binding:"required"`
+	IP           string           `json:"ip" binding:"required"`
+	Lat          float64          `json:"latitude" binding:"required"`
+	Lng          float64          `json:"longitude" binding:"required"`
+	Desc         string           `json:"desc"`
+	AngleStart   int              `json:"angle_start" default:"0"`
+	Config       []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config"`
+	PresetConfig []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"preset_config"`
 }
 
 type DBlockerConfigUpdate struct {
