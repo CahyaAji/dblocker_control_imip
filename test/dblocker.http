@@ -1,6 +1,42 @@
-### 1. Register DBlocker
-POST http://localhost:8080/api/dblockers
+@host = http://localhost:8080
+@token = paste_your_token_here
+
+### 0a. Login (get token)
+POST {{host}}/api/auth/login
 Content-Type: application/json
+
+{
+    "username": "admin",
+    "password": "admin"
+}
+
+### 0b. Create User (admin only)
+POST {{host}}/api/users
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "username": "operator1",
+    "password": "operator123",
+    "is_admin": false
+}
+
+### 0c. List Users (admin only)
+GET {{host}}/api/users
+Authorization: Bearer {{token}}
+
+### 0d. Delete User (admin only)
+DELETE {{host}}/api/users/2
+Authorization: Bearer {{token}}
+
+### 0e. Get Current User
+GET {{host}}/api/auth/me
+Authorization: Bearer {{token}}
+
+### 1. Register DBlocker
+POST {{host}}/api/dblockers
+Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "name": "1 Runway 13 Bandara",
@@ -104,14 +140,17 @@ Content-Type: application/json
 
 
 ### 2. Get All DBlockers
-GET http://localhost:8080/api/dblockers
+GET {{host}}/api/dblockers
+Authorization: Bearer {{token}}
 
 ### 3. Get DBlocker by ID
-GET http://localhost:8080/api/dblockers/1
+GET {{host}}/api/dblockers/1
+Authorization: Bearer {{token}}
 
 ### 4. Update DBlocker by ID
-PUT http://localhost:8080/api/dblockers/1
+PUT {{host}}/api/dblockers/1
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "name": "Runway 13 Bandara",
@@ -133,12 +172,14 @@ Content-Type: application/json
 
 
 ### 5. Delete DBlocker by ID
-DELETE http://localhost:8080/api/dblockers/5
+DELETE {{host}}/api/dblockers/5
+Authorization: Bearer {{token}}
 
 
 ### 6. Update DBlocker Config
-PUT http://localhost:8080/api/dblockers/config
+PUT {{host}}/api/dblockers/config
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "id": 6,
@@ -153,14 +194,17 @@ Content-Type: application/json
 }
 
 ### 7. Turn Off All DBlocker Config
-GET http://192.168.1.174:8080/api/dblockers/config/off/3
+GET {{host}}/api/dblockers/config/off/3
+Authorization: Bearer {{token}}
 
-### 7. Turn Off All DBlocker Config B
-GET http://10.88.81.16:8080/api/dblockers/config/off/1
+### 7b. Turn Off All DBlocker Config B
+GET {{host}}/api/dblockers/config/off/1
+Authorization: Bearer {{token}}
 
 ### 8. Save Preset Config (store preset ON state for a dblocker)
-PUT http://localhost:8080/api/dblockers/preset
+PUT {{host}}/api/dblockers/preset
 Content-Type: application/json
+Authorization: Bearer {{token}}
 
 {
     "id": 6,
@@ -175,4 +219,5 @@ Content-Type: application/json
 }
 
 ### 9. Apply Preset ON (publish saved preset config to device via MQTT)
-GET http://localhost:8080/api/dblockers/config/preset/6
+GET {{host}}/api/dblockers/config/preset/6
+Authorization: Bearer {{token}}
