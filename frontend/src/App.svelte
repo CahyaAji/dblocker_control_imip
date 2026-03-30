@@ -1,17 +1,30 @@
 <script lang="ts">
+  import LoginPage from "./lib/components/LoginPage.svelte";
   import Map from "./lib/components/Map.svelte";
   import MsgReceiverBox from "./lib/components/MsgReceiverBox.svelte";
   import MsgStatusBox from "./lib/components/MsgStatusBox.svelte";
   import SideMenu from "./lib/components/SideMenu.svelte";
+  import UserManagement from "./lib/components/UserManagement.svelte";
+  import { authStore, logout, verifyToken } from "./lib/store/authStore";
   import { settings } from "./lib/store/configStore";
   import { startPolling, stopPolling } from "./lib/store/dblockerStore";
 
   let isResizing = $state(false);
   let activeMsgTab = $state<"receiver" | "status">("receiver");
+  let showUserMgmt = $state(false);
+
+  // Verify token on mount
+  $effect(() => {
+    if ($authStore.token) {
+      verifyToken();
+    }
+  });
 
   $effect(() => {
-    startPolling(2000);
-    return () => stopPolling();
+    if ($authStore.token) {
+      startPolling(2000);
+      return () => stopPolling();
+    }
   });
 
   const toggleSidebar = () => {
@@ -51,6 +64,9 @@
 
 <svelte:window onmousemove={handleMouseMove} onmouseup={stopResize} />
 
+{#if !$authStore.token}
+  <LoginPage />
+{:else}
 <div class="app-container">
   <main>
     <div class="map-area">
@@ -81,11 +97,30 @@
             aria-label="Toggle Sidebar">☰</button
           >
           {#if $settings.sidebarExpanded}
-            <button
-              class="theme-toggle"
-              onclick={toggleTheme}
-              aria-label="Toggle Theme"
-            >
+            <div class="header-actions">
+              {#if $authStore.user?.is_admin}
+                <button
+                  class="icon-btn"
+                  onclick={() => (showUserMgmt = !showUserMgmt)}
+                  aria-label="User Management"
+                  title="User Management"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </button>
+              {/if}
+              <button
+                class="icon-btn"
+                onclick={logout}
+                aria-label="Logout"
+                title="Logout ({$authStore.user?.username})"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </button>
+              <button
+                class="theme-toggle"
+                onclick={toggleTheme}
+                aria-label="Toggle Theme"
+              >
               {#if $settings.theme === "dark"}
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -133,11 +168,16 @@
                 >
               {/if}
             </button>
+            </div>
           {/if}
         </div>
         <div class="sidebar-content">
           {#if $settings.sidebarExpanded}
-            <SideMenu />
+            {#if showUserMgmt && $authStore.user?.is_admin}
+              <UserManagement />
+            {:else}
+              <SideMenu />
+            {/if}
           {/if}
         </div>
       </aside>
@@ -179,6 +219,7 @@
     {/if}
   </div>
 </div>
+{/if}
 
 <style>
   .dev-panel {
@@ -336,6 +377,31 @@
     transform: translateY(-1px);
     border-color: color-mix(in srgb, var(--accent-cyan) 45%, transparent);
     box-shadow: 0 6px 16px rgba(19, 182, 217, 0.2);
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .icon-btn {
+    background: color-mix(in srgb, var(--card-bg) 86%, var(--bg-elevated) 14%);
+    border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--text-primary);
+    padding: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+  }
+
+  .icon-btn:hover {
+    transform: translateY(-1px);
+    border-color: color-mix(in srgb, var(--accent-blue) 40%, transparent);
+    box-shadow: 0 6px 16px rgba(19, 134, 217, 0.18);
   }
 
   .sidebar-content {

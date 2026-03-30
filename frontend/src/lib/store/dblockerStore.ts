@@ -1,5 +1,6 @@
 import { writable, get } from 'svelte/store';
 import { API_BASE } from '../utils/api';
+import { authFetch } from './authStore';
 
 export interface DBlockerConfig {
     signal_ctrl: boolean;
@@ -34,7 +35,7 @@ let pollingInterval: ReturnType<typeof setInterval> | undefined;
 // --- READ DATA (GET) ---
 export async function fetchDBlockers() {
     try {
-        const res = await fetch(`${API_BASE}/api/dblockers`);
+        const res = await authFetch(`${API_BASE}/api/dblockers`);
         if (!res.ok) throw new Error("Fetch dblockers failed");
 
         const json = await res.json();
@@ -71,7 +72,7 @@ export async function updateDBlockerConfig(blockerId: number, config: DBlockerCo
             config: config
         };
 
-        const res = await fetch(`${API_BASE}/api/dblockers/config`, {
+        const res = await authFetch(`${API_BASE}/api/dblockers/config`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -113,8 +114,8 @@ export async function switchSignal(
             value: newValue // true or false
         };
 
-        const res = await fetch(`${API_BASE}/api/dblockers/switch`, {
-            method: 'POST', // or 'PUT'
+        const res = await authFetch(`${API_BASE}/api/dblockers/switch`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
@@ -142,7 +143,7 @@ export async function switchSignal(
 
 export async function turnOffAll(blockerId: number) {
     try {
-        const res = await fetch(`${API_BASE}/api/dblockers/config/off/${blockerId}`);
+        const res = await authFetch(`${API_BASE}/api/dblockers/config/off/${blockerId}`);
         if (!res.ok) throw new Error('Failed to turn off all');
         await fetchDBlockers();
     } catch (err) {
@@ -153,7 +154,7 @@ export async function turnOffAll(blockerId: number) {
 
 export async function presetOn(blockerId: number) {
     try {
-        const res = await fetch(`${API_BASE}/api/dblockers/config/preset/${blockerId}`);
+        const res = await authFetch(`${API_BASE}/api/dblockers/config/preset/${blockerId}`);
         if (!res.ok) throw new Error('Failed to apply preset ON');
         await fetchDBlockers();
     } catch (err) {
@@ -165,7 +166,7 @@ export async function presetOn(blockerId: number) {
 export async function updatePresetConfig(blockerId: number, config: DBlockerConfig[]) {
     try {
         const payload = { id: blockerId, config };
-        const res = await fetch(`${API_BASE}/api/dblockers/preset`, {
+        const res = await authFetch(`${API_BASE}/api/dblockers/preset`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { API_BASE } from '../utils/api';
+import { getAuthToken } from './authStore';
 
 // Holds the latest payload for every MQTT topic received via SSE
 export const bridgeStore = writable<Record<string, string>>({});
@@ -11,7 +12,12 @@ export function subscribeBridge() {
     refCount++;
     if (source) return;
 
-    source = new EventSource(`${API_BASE}/events`);
+    const token = getAuthToken();
+    const url = token
+        ? `${API_BASE}/events?token=${encodeURIComponent(token)}`
+        : `${API_BASE}/events`;
+
+    source = new EventSource(url);
 
     source.onmessage = (ev: MessageEvent<string>) => {
         try {
