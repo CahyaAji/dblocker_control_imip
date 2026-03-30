@@ -198,8 +198,8 @@
     });
 </script>
 
-<div class="card" class:expanded={isExpanded}>
-    <div class="card-header">
+<div class="card" class:expanded={isExpanded} class:has-error={warningState === "error"}>
+    <div class="card-header" class:has-error={warningState === "error"}>
         <div class="title-wrap">
             <div class="title-meta-wrap">
                 <div class="card-title">{dblocker.name}</div>
@@ -279,6 +279,19 @@
         transform: translateY(-1px);
     }
 
+    .card.has-error {
+        background: linear-gradient(
+            155deg,
+            color-mix(in srgb, var(--card-bg) 72%, var(--bg-elevated) 28%) 0%,
+            color-mix(in srgb, var(--card-bg) 72%, var(--accent-red, #d32f2f) 28%) 60%,
+            color-mix(in srgb, var(--card-bg) 78%, var(--accent-red, #d32f2f) 22%) 100%
+        );
+        border-color: color-mix(in srgb, var(--accent-red, #d32f2f) 48%, var(--separator) 52%);
+        box-shadow:
+            0 12px 30px color-mix(in srgb, var(--accent-red, #d32f2f) 20%, transparent 80%),
+            inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
     .card-header {
         margin-bottom: 10px;
     }
@@ -303,6 +316,14 @@
         font-weight: 700;
         line-height: 1;
         color: var(--text-primary);
+    }
+
+    .card-header.has-error .card-title {
+        color: var(--accent-red, #b71c1c);
+        background: color-mix(in srgb, var(--accent-red, #d32f2f) 18%, white 82%);
+        border: 1px solid color-mix(in srgb, var(--accent-red, #d32f2f) 42%, transparent 58%);
+        border-radius: 8px;
+        padding: 4px 8px;
     }
 
     .title-separator {
