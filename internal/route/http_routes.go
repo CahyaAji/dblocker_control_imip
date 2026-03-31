@@ -17,9 +17,11 @@ import (
 func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler, bridgeService *service.BridgeService, authService *service.AuthService) {
 
 	dblockerRepo := repository.NewDBlockerRepository(db)
+	scheduleRepo := repository.NewScheduleRepository(db)
 
 	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, mqttClient, bridgeService)
 	authHandler := handlerhttp.NewAuthHandler(authService)
+	scheduleHandler := handlerhttp.NewScheduleHandler(scheduleRepo)
 
 	// Public routes
 	r.POST("/api/auth/login", authHandler.Login)
@@ -51,6 +53,12 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.PUT("/dblockers/preset", dblockerHandler.UpdatePresetConfig)
 	api.GET("/dblockers/monitor", dblockerHandler.GetMonitorStatus)
 	api.DELETE("/dblockers/:id", dblockerHandler.DeleteDBlocker)
+
+	// Schedules
+	api.POST("/schedules", scheduleHandler.CreateSchedule)
+	api.GET("/schedules", scheduleHandler.GetSchedules)
+	api.PUT("/schedules/:id/toggle", scheduleHandler.ToggleSchedule)
+	api.DELETE("/schedules/:id", scheduleHandler.DeleteSchedule)
 
 	//! make sure frontend is built first: npm run build (inside frontend/)
 
