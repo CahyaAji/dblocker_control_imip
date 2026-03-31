@@ -12,11 +12,13 @@ import (
 )
 
 type ScheduleHandler struct {
-	Repo *repository.ScheduleRepository
+	Repo         *repository.ScheduleRepository
+	LogRepo      *repository.ActionLogRepository
+	DBlockerRepo *repository.DBlockerRepository
 }
 
-func NewScheduleHandler(repo *repository.ScheduleRepository) *ScheduleHandler {
-	return &ScheduleHandler{Repo: repo}
+func NewScheduleHandler(repo *repository.ScheduleRepository, logRepo *repository.ActionLogRepository, dblockerRepo *repository.DBlockerRepository) *ScheduleHandler {
+	return &ScheduleHandler{Repo: repo, LogRepo: logRepo, DBlockerRepo: dblockerRepo}
 }
 
 var timeRegex = regexp.MustCompile(`^([01]\d|2[0-3]):[0-5]\d$`)
@@ -69,17 +71,48 @@ func (h *ScheduleHandler) CreateSchedule(c *gin.Context) {
 		return
 	}
 
+	// Get creator username
+	creatorName := "unknown"
+	if u, ok := c.Get("user"); ok {
+		if user, ok := u.(*models.User); ok {
+			creatorName = user.Username
+		}
+	}
+
 	schedule := models.Schedule{
 		DBlockerID: input.DBlockerID,
 		Config:     input.Config,
 		Time:       utcTime,
 		Timezone:   input.Timezone,
+		CreatedBy:  creatorName,
 		Enabled:    true,
 	}
 
 	if err := h.Repo.Create(&schedule); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		dbName := ""
+		if h.DBlockerRepo != nil {
+			if db, err := h.DBlockerRepo.FindByID(schedule.DBlockerID); err == nil {
+				dbName = db.Name
+			}
+		}
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "create_schedule",
+			DBlockerID:   schedule.DBlockerID,
+			DBlockerName: dbName,
+			Config:       schedule.Config,
+		})
 	}
 
 	c.JSON(http.StatusCreated, gin.H{"data": schedule})

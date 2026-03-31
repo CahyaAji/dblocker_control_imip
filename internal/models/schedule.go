@@ -9,6 +9,7 @@ type Schedule struct {
 	Config     []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config" binding:"required"`
 	Time       string           `gorm:"not null" json:"time" binding:"required"`
 	Timezone   string           `gorm:"not null;default:'+00:00'" json:"timezone"`
+	CreatedBy  string           `gorm:"not null;default:''" json:"created_by"`
 	Enabled    bool             `gorm:"default:true" json:"enabled"`
 	CreatedAt  time.Time        `json:"created_at"`
 }
