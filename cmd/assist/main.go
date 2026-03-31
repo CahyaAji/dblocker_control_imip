@@ -16,11 +16,18 @@ type DBlockerConfig struct {
 	SignalCtrl bool `json:"signal_ctrl"`
 }
 
+type DBlocker struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
 type Schedule struct {
 	ID         uint             `json:"id"`
 	DBlockerID uint             `json:"dblocker_id"`
+	DBlocker   DBlocker         `json:"dblocker"`
 	Config     []DBlockerConfig `json:"config"`
 	Time       string           `json:"time"` // UTC HH:MM
+	CreatedBy  string           `json:"created_by"`
 	Enabled    bool             `json:"enabled"`
 }
 
@@ -106,6 +113,11 @@ func runSchedules(executed map[string]bool) {
 		}
 		executed[key] = true
 		log.Printf("schedule #%d applied successfully", s.ID)
+
+		// Log the action
+		if err := createActionLog(s); err != nil {
+			log.Printf("warn: failed to log schedule #%d: %v", s.ID, err)
+		}
 	}
 }
 
@@ -164,6 +176,48 @@ func applyConfig(s Schedule) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody))
+	}
+	return nil
+}
+
+type ActionLogPayload struct {
+	Username     string           `json:"username"`
+	Action       string           `json:"action"`
+	DBlockerID   uint             `json:"dblocker_id"`
+	DBlockerName string           `json:"dblocker_name"`
+	Config       []DBlockerConfig `json:"config"`
+}
+
+func createActionLog(s Schedule) error {
+	payload := ActionLogPayload{
+		Username:     fmt.Sprintf("assistant[%s]", s.CreatedBy),
+		Action:       "scheduled_config_update",
+		DBlockerID:   s.DBlockerID,
+		DBlockerName: s.DBlocker.Name,
+		Config:       s.Config,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", backendURL+"/api/logs", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
 		respBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody))
 	}
