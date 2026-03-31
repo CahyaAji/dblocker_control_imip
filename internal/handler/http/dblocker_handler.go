@@ -15,12 +15,13 @@ import (
 
 type DBlockerHandler struct {
 	Repo       *repository.DBlockerRepository
+	LogRepo    *repository.ActionLogRepository
 	MqttClient mqtt.Client
 	Bridge     *service.BridgeService
 }
 
-func NewDBlockerHandler(repo *repository.DBlockerRepository, mqttClient mqtt.Client, bridge *service.BridgeService) *DBlockerHandler {
-	return &DBlockerHandler{Repo: repo, MqttClient: mqttClient, Bridge: bridge}
+func NewDBlockerHandler(repo *repository.DBlockerRepository, logRepo *repository.ActionLogRepository, mqttClient mqtt.Client, bridge *service.BridgeService) *DBlockerHandler {
+	return &DBlockerHandler{Repo: repo, LogRepo: logRepo, MqttClient: mqttClient, Bridge: bridge}
 }
 
 func (h *DBlockerHandler) CreateDBlocker(c *gin.Context) {
@@ -189,6 +190,23 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish to mqtt"})
 		return
 	}
+
+	// Log action — skip for _service (assist app logs its own "scheduled_config_update")
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil && username != "_service" {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "config_update",
+			DBlockerID:   input.ID,
+			DBlockerName: dblocker.Name,
+			Config:       input.Config[:],
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{"data": input})
 }
 
@@ -254,6 +272,22 @@ func (h *DBlockerHandler) TurnOffAllDBlockerConfig(c *gin.Context) {
 			"config": allOffConfig,
 		},
 	})
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "turn_off_all",
+			DBlockerID:   uint(id),
+			DBlockerName: dblocker.Name,
+			Config:       allOffConfig[:],
+		})
+	}
 }
 
 // GetMonitorStatus returns the current monitor errors for all dblockers.
@@ -320,6 +354,22 @@ func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 			"config": dblocker.PresetConfig,
 		},
 	})
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "preset_on",
+			DBlockerID:   uint(id),
+			DBlockerName: dblocker.Name,
+			Config:       dblocker.PresetConfig,
+		})
+	}
 }
 
 func (h *DBlockerHandler) UpdatePresetConfig(c *gin.Context) {
