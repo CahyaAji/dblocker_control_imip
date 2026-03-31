@@ -1,5 +1,10 @@
 ## Development Guide (Laptop)
 
+### 0) Quick build after changed
+```
+docker compose down && docker compose up -d --build
+```
+
 This file is for day-to-day development on your laptop.
 
 ### 1) First-time setup (new machine / fresh clone)
