@@ -1,6 +1,7 @@
 <script>
     import DblockersCard from "./DblockersCard.svelte";
     import DBlockersList from "./DBlockersList.svelte";
+    import ScheduleManager from "./ScheduleManager.svelte";
 
     let activeTab = $state("dblocker");
 </script>
@@ -29,9 +30,7 @@
     {:else if activeTab === "dblocker"}
         <DblockersCard />
     {:else if activeTab === "scheduler"}
-        <div class="other" style="background-color: orange;">
-            Content for Tab 3
-        </div>
+        <ScheduleManager />
     {/if}
 </div>
 
