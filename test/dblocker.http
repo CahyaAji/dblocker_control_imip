@@ -1,13 +1,18 @@
+# @host = http://10.88.81.16:8080
 @host = http://localhost:8080
-@token = paste_your_token_here
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU1NzIwNDgsImlzX2FkbWluIjpmYWxzZSwidXNlcl9pZCI6MiwidXNlcm5hbWUiOiJBamkifQ.9cDn-BK3HvqEbJKl6iyBGRmT6fYfZNIbEwuB5MFZYvQ
+
+###
+http://localhost:8080/dashboard
 
 ### 0a. Login (get token)
 POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "admin",
-    "password": "admin"
+    "username": "Aji",
+    "password": "zxcjkl01"
 }
 
 ### 0b. Create User (admin only)
@@ -148,26 +153,18 @@ GET {{host}}/api/dblockers/1
 Authorization: Bearer {{token}}
 
 ### 4. Update DBlocker by ID
-PUT {{host}}/api/dblockers/1
+PUT {{host}}/api/dblockers/14
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name": "Runway 13 Bandara",
-    "serial_numb": "250001",
-    "ip": "10.88.81.2",
-    "latitude": -7.786959801210232,
-    "longitude": 110.4220920495705,
-    "desc": "Drone blocker di barat",
-    "angle_start": 0,
-    "config": [
-        {"signal_ctrl": true, "signal_gps": false},
-        {"signal_ctrl": true, "signal_gps": false},
-        {"signal_ctrl": true, "signal_gps": false},
-        {"signal_ctrl": false, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": true}
-    ]
+    "name": "5 Terminal Utama Tsingsan",
+    "serial_numb": "250005",
+    "ip": "10.88.81.6",
+    "latitude": -2.808731,
+    "longitude": 122.147636,
+    "desc": "Blocker 5 Terminal Utama Tsingsan",
+    "angle_start": 0
 }
 
 
