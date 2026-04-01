@@ -9,10 +9,12 @@ import (
 	"sync"
 )
 
-// liveChannelBuf is the buffer size for each SSE subscriber's live message channel.
-// Retained /sta snapshot bypasses this channel entirely, so the size is
-// independent of device count and only needs to absorb short bursts of live messages.
+// liveChannelBuf is the buffer size for each SSE subscriber's live /rpt channel.
 const liveChannelBuf = 64
+
+// staChannelBuf is the buffer size for each SSE subscriber's /sta channel.
+// /sta messages are critical (status changes) and must never be dropped.
+const staChannelBuf = 32
 
 // BridgeService subscribes to MQTT and fans messages to subscribers.
 type BridgeService struct {
@@ -27,13 +29,19 @@ type BridgeService struct {
 	monitor         *CurrentMonitorService
 }
 
+// Subscriber holds separate channels for /sta (priority) and /rpt (best-effort).
+type Subscriber struct {
+	StaCh  chan mqtt.Message // status changes — never dropped
+	LiveCh chan mqtt.Message // /rpt sensor data — dropped if slow
+}
+
 type broadcaster struct {
 	mu          sync.Mutex
-	subscribers map[chan mqtt.Message]struct{}
+	subscribers map[*Subscriber]struct{}
 }
 
 func newBroadcaster() *broadcaster {
-	return &broadcaster{subscribers: make(map[chan mqtt.Message]struct{})}
+	return &broadcaster{subscribers: make(map[*Subscriber]struct{})}
 }
 
 type DBlockerReader interface {
@@ -189,18 +197,6 @@ func (b *BridgeService) Topic() string {
 	return b.topics[0]
 }
 
-// Snapshot returns the last known payload for all /sta topics.
-// Replayed to new SSE clients so retained status messages are immediately visible.
-func (b *BridgeService) Snapshot() []mqtt.Message {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	msgs := make([]mqtt.Message, 0, len(b.lastByTopic))
-	for _, msg := range b.lastByTopic {
-		msgs = append(msgs, msg)
-	}
-	return msgs
-}
-
 // Monitor returns the current monitor service.
 func (b *BridgeService) Monitor() *CurrentMonitorService {
 	return b.monitor
@@ -213,23 +209,36 @@ func (b *BridgeService) LastRpt(serial string) string {
 	return b.lastRptBySerial[serial]
 }
 
-// Subscribe returns a buffered channel that receives live MQTT messages.
-// Snapshot replay bypasses this channel, so the buffer only needs to
-// absorb short live-message bursts; see liveChannelBuf.
-func (b *BridgeService) Subscribe() chan mqtt.Message {
+// SubscribeWithSnapshot atomically takes a /sta snapshot and creates subscriber
+// channels, ensuring no /sta message can fall between snapshot and subscription.
+func (b *BridgeService) SubscribeWithSnapshot() (*Subscriber, []mqtt.Message) {
+	// Lock both mutexes: broadcaster.mu to register the subscriber,
+	// and b.mu to read the snapshot — all before returning.
 	b.broadcaster.mu.Lock()
 	defer b.broadcaster.mu.Unlock()
-	ch := make(chan mqtt.Message, liveChannelBuf)
-	b.broadcaster.subscribers[ch] = struct{}{}
-	return ch
+
+	b.mu.RLock()
+	snap := make([]mqtt.Message, 0, len(b.lastByTopic))
+	for _, msg := range b.lastByTopic {
+		snap = append(snap, msg)
+	}
+	b.mu.RUnlock()
+
+	sub := &Subscriber{
+		StaCh:  make(chan mqtt.Message, staChannelBuf),
+		LiveCh: make(chan mqtt.Message, liveChannelBuf),
+	}
+	b.broadcaster.subscribers[sub] = struct{}{}
+	return sub, snap
 }
 
-func (b *BridgeService) Unsubscribe(ch chan mqtt.Message) {
+func (b *BridgeService) Unsubscribe(sub *Subscriber) {
 	b.broadcaster.mu.Lock()
 	defer b.broadcaster.mu.Unlock()
-	if _, ok := b.broadcaster.subscribers[ch]; ok {
-		delete(b.broadcaster.subscribers, ch)
-		close(ch)
+	if _, ok := b.broadcaster.subscribers[sub]; ok {
+		delete(b.broadcaster.subscribers, sub)
+		close(sub.StaCh)
+		close(sub.LiveCh)
 	}
 }
 
@@ -255,11 +264,23 @@ func (b *BridgeService) broadcast(msg mqtt.Message) {
 
 	b.broadcaster.mu.Lock()
 	defer b.broadcaster.mu.Unlock()
-	for ch := range b.broadcaster.subscribers {
-		select {
-		case ch <- msg:
-		default:
-			// Drop if subscriber is slow.
+
+	isSta := strings.HasSuffix(msg.Topic, "/sta")
+	for sub := range b.broadcaster.subscribers {
+		if isSta {
+			// /sta messages are critical — block briefly to ensure delivery.
+			select {
+			case sub.StaCh <- msg:
+			default:
+				// Buffer full — should be rare. Log and skip to avoid blocking broadcast.
+				log.Printf("warn: /sta channel full, dropping message for topic %s", msg.Topic)
+			}
+		} else {
+			// /rpt messages are best-effort — drop if subscriber is slow.
+			select {
+			case sub.LiveCh <- msg:
+			default:
+			}
 		}
 	}
 }

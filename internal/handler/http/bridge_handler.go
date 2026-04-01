@@ -18,13 +18,10 @@ func NewBridgeHandler(bridge *service.BridgeService) *BridgeHandler {
 
 // Events streams MQTT messages to browsers using SSE.
 func (h *BridgeHandler) Events(c *gin.Context) {
-	snapshot := h.bridge.Snapshot()
-	ch := h.bridge.Subscribe()
-	defer h.bridge.Unsubscribe(ch)
+	sub, snapshot := h.bridge.SubscribeWithSnapshot()
+	defer h.bridge.Unsubscribe(sub)
 
-	// Flush retained /sta snapshot first (never touches the channel buffer),
-	// then block on live messages. This way channel size is independent of
-	// the number of devices.
+	// Flush retained /sta snapshot first, then multiplex live channels.
 	snapshotIdx := 0
 	c.Stream(func(w io.Writer) bool {
 		if snapshotIdx < len(snapshot) {
@@ -37,14 +34,40 @@ func (h *BridgeHandler) Events(c *gin.Context) {
 			return true
 		}
 
-		msg, ok := <-ch
-		if !ok {
-			return false
+		// Multiplex: prefer /sta (status) over /rpt (sensor data).
+		select {
+		case msg, ok := <-sub.StaCh:
+			if !ok {
+				return false
+			}
+			c.SSEvent("message", gin.H{
+				"topic":   msg.Topic,
+				"payload": string(msg.Payload),
+			})
+			return true
+		default:
 		}
-		c.SSEvent("message", gin.H{
-			"topic":   msg.Topic,
-			"payload": string(msg.Payload),
-		})
-		return true
+
+		// No /sta pending — wait for either channel.
+		select {
+		case msg, ok := <-sub.StaCh:
+			if !ok {
+				return false
+			}
+			c.SSEvent("message", gin.H{
+				"topic":   msg.Topic,
+				"payload": string(msg.Payload),
+			})
+			return true
+		case msg, ok := <-sub.LiveCh:
+			if !ok {
+				return false
+			}
+			c.SSEvent("message", gin.H{
+				"topic":   msg.Topic,
+				"payload": string(msg.Payload),
+			})
+			return true
+		}
 	})
 }
