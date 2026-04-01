@@ -1,11 +1,10 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { API_BASE } from "../utils/api";
-
-    type BridgeEvent = {
-        topic?: string;
-        payload?: string;
-    };
+    import {
+        bridgeStore,
+        subscribeBridge,
+        unsubscribeBridge,
+    } from "../store/bridgeStore";
 
     type CurrentData = {
         raw: number;
@@ -20,10 +19,6 @@
         digital: boolean | null;
         raw: string;
     };
-
-    let latestByTopic: Record<string, string> = {};
-    let status = "connecting…";
-    let source: EventSource | null = null;
 
     // --- MATH CONVERSIONS ---
     const calculateTemperatureC = (rawADC: number): number | null => {
@@ -86,27 +81,9 @@
         };
     };
 
-    const handleMessage = (ev: MessageEvent<string>) => {
-        try {
-            const data: BridgeEvent = JSON.parse(ev.data);
-            const topic = data.topic?.trim();
-            const payload = data.payload ?? "";
-
-            if (!topic || topic.endsWith("/sta")) return;
-
-            latestByTopic = {
-                ...latestByTopic,
-                [topic]: payload,
-            };
-        } catch (err) {
-            console.error("Failed to parse event data:", err);
-            // Ignore malformed event payloads.
-        }
-    };
-
-    $: topicEntries = Object.entries(latestByTopic).sort(([a], [b]) =>
-        a.localeCompare(b),
-    );
+    $: topicEntries = Object.entries($bridgeStore)
+        .filter(([topic]) => !topic.endsWith("/sta"))
+        .sort(([a], [b]) => a.localeCompare(b));
 
     $: parsedEntries = topicEntries.map(([topic, payload]) => {
         const isReportTopic = topic.endsWith("/rpt");
@@ -119,15 +96,8 @@
     });
 
     onMount(() => {
-        source = new EventSource(`${API_BASE}/events`);
-        source.onopen = () => (status = "connected");
-        source.onerror = () => (status = "error (will retry)");
-        source.onmessage = handleMessage;
-
-        return () => {
-            source?.close();
-            source = null;
-        };
+        subscribeBridge();
+        return () => unsubscribeBridge();
     });
 </script>
 

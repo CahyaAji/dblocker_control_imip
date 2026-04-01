@@ -1,44 +1,18 @@
 <script lang="ts">
     import { onMount } from "svelte";
-    import { API_BASE } from "../utils/api";
+    import {
+        bridgeStore,
+        subscribeBridge,
+        unsubscribeBridge,
+    } from "../store/bridgeStore";
 
-    type BridgeEvent = {
-        topic?: string;
-        payload?: string;
-    };
-
-    let latestByTopic: Record<string, string> = {};
-    let source: EventSource | null = null;
-
-    const handleMessage = (ev: MessageEvent<string>) => {
-        try {
-            const data: BridgeEvent = JSON.parse(ev.data);
-            const topic = data.topic?.trim();
-            const payload = data.payload ?? "";
-
-            if (!topic || !topic.endsWith("/sta")) return;
-
-            latestByTopic = {
-                ...latestByTopic,
-                [topic]: payload,
-            };
-        } catch (err) {
-            console.error("Failed to parse status event data:", err);
-        }
-    };
-
-    $: entries = Object.entries(latestByTopic).sort(([a], [b]) =>
-        a.localeCompare(b),
-    );
+    $: entries = Object.entries($bridgeStore)
+        .filter(([topic]) => topic.endsWith("/sta"))
+        .sort(([a], [b]) => a.localeCompare(b));
 
     onMount(() => {
-        source = new EventSource(`${API_BASE}/events`);
-        source.onmessage = handleMessage;
-
-        return () => {
-            source?.close();
-            source = null;
-        };
+        subscribeBridge();
+        return () => unsubscribeBridge();
     });
 </script>
 
