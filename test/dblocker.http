@@ -1,7 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU1NzIwNDgsImlzX2FkbWluIjpmYWxzZSwidXNlcl9pZCI6MiwidXNlcm5hbWUiOiJBamkifQ.9cDn-BK3HvqEbJKl6iyBGRmT6fYfZNIbEwuB5MFZYvQ
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU2NTA2MDAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.eOwCtDHHhB-T5AR7nOj4ldBlN1i9PNOLZXNmR7RTVu4
 
 ###
 http://localhost:8080/dashboard
@@ -11,7 +11,7 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "Aji",
+    "username": "aji",
     "password": "zxcjkl01"
 }
 
@@ -43,15 +43,15 @@ POST {{host}}/api/dblockers
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
-{
-    "name": "1 Runway 13 Bandara",
-    "serial_numb": "250001",
-    "ip": "10.88.81.2",
-    "latitude": -2.793327,
-    "longitude": 122.131681,
-    "desc": "Blocker 1 Runway 13 Bandara",
-    "angle_start": 0
-}
+# {
+#     "name": "1 Runway 13 Bandara",
+#     "serial_numb": "250001",
+#     "ip": "10.88.81.2",
+#     "latitude": -2.793327,
+#     "longitude": 122.131681,
+#     "desc": "Blocker 1 Runway 13 Bandara",
+#     "angle_start": 0
+# }
 
 # {
 #     "name": "2 Edu Park IMIP",
@@ -133,15 +133,15 @@ Authorization: Bearer {{token}}
 #     "angle_start": 0
 # }
 
-# {
-#     "name": "10 Kinrui",
-#     "serial_numb": "250010",
-#     "ip": "10.88.81.11",
-#     "latitude": -2.879332,
-#     "longitude": 122.172372,
-#     "desc": "Blocker 10 Kinrui",
-#     "angle_start": 0
-# }
+{
+    "name": "10 Kinrui",
+    "serial_numb": "250010",
+    "ip": "10.88.81.11",
+    "latitude": -2.879332,
+    "longitude": 122.172372,
+    "desc": "Blocker 10 Kinrui",
+    "angle_start": 0
+}
 
 
 ### 2. Get All DBlockers
