@@ -24,6 +24,7 @@ services:
     environment:
       API_KEY: ${API_KEY}
       BACKEND_URL: http://dblocker-app:8080
+      DRONE_DETECTORS: ${DRONE_DETECTORS:-}
 
   mosquitto:
     restart: always
