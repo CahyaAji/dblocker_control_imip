@@ -8,6 +8,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -57,6 +59,19 @@ func main() {
 	}
 
 	log.Println("dblocker-assist started, polling schedules...")
+
+	// Start drone detector connections (comma-separated "host:port" pairs)
+	if detectors := os.Getenv("DRONE_DETECTORS"); detectors != "" {
+		for i, addr := range strings.Split(detectors, ",") {
+			addr = strings.TrimSpace(addr)
+			if addr == "" {
+				continue
+			}
+			host, port := parseHostPort(addr)
+			label := fmt.Sprintf("detector-%d", i+1)
+			go StartDroneDetector(label, host, port)
+		}
+	}
 
 	// Track which schedules already executed this minute to avoid duplicates.
 	// Key: "scheduleID:HH:MM"
@@ -222,4 +237,16 @@ func createActionLog(s Schedule) error {
 		return fmt.Errorf("status %d: %s", resp.StatusCode, string(respBody))
 	}
 	return nil
+}
+
+func parseHostPort(addr string) (string, int) {
+	parts := strings.SplitN(addr, ":", 2)
+	host := parts[0]
+	port := 5555
+	if len(parts) == 2 {
+		if p, err := strconv.Atoi(parts[1]); err == nil {
+			port = p
+		}
+	}
+	return host, port
 }
