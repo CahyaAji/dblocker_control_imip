@@ -8,82 +8,167 @@
     let mapContainer: HTMLElement;
     let map = $state<maplibregl.Map>();
 
-    // Track Markers
-    let markers = new Map<number, maplibregl.Marker>();
-    // Track Config State (to detect changes)
+    // Track HTML overlay markers (for radar animation only)
+    let overlayMarkers = new Map<number, maplibregl.Marker>();
     let previousConfigMap = new Map<number, string>();
 
     let resizeObserver: ResizeObserver;
     let debounceTimer: ReturnType<typeof setTimeout>;
+
+    const SOURCE_ID = "dblockers-source";
+    const LAYER_GLOW_ID = "dblockers-glow";
+    const LAYER_CORE_ID = "dblockers-core";
+    const LAYER_BORDER_ID = "dblockers-border";
+    const LAYER_LABEL_ID = "dblockers-label";
 
     const MAP_STYLES = {
         normal: "https://api.maptiler.com/maps/openstreetmap/style.json?key=aUOEn1bA48mz3xc3pL4N",
         hybrid: "https://api.maptiler.com/maps/hybrid/style.json?key=aUOEn1bA48mz3xc3pL4N",
     };
 
-    // ✨ 1. REACTIVE DATA LISTENER
-    // Whenever $dblockerStore changes (polling or user click), this runs.
     $effect(() => {
         if (map && $dblockerStore.length > 0) debounceRender($dblockerStore);
     });
 
-    // ✨ 2. REACTIVE STYLE LISTENER
-    // Whenever $settings changes, this runs.
     $effect(() => {
-        if (map && $settings.mapStyle)
+        if (map && $settings.mapStyle) {
             map.setStyle(MAP_STYLES[$settings.mapStyle]);
+            // Re-add source/layers after style change
+            map.once("style.load", () => {
+                addSourceAndLayers();
+                if ($dblockerStore.length > 0) updateMarkers($dblockerStore);
+            });
+        }
     });
+
+    function addSourceAndLayers() {
+        if (!map || map.getSource(SOURCE_ID)) return;
+
+        map.addSource(SOURCE_ID, {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+        });
+
+        // Outer glow ring
+        map.addLayer({
+            id: LAYER_GLOW_ID,
+            type: "circle",
+            source: SOURCE_ID,
+            paint: {
+                "circle-radius": 12,
+                "circle-color": "rgba(210, 54, 31, 0.15)",
+                "circle-blur": 0.5,
+            },
+        });
+
+        // White border ring
+        map.addLayer({
+            id: LAYER_BORDER_ID,
+            type: "circle",
+            source: SOURCE_ID,
+            paint: {
+                "circle-radius": 9,
+                "circle-color": "rgba(255, 255, 255, 0.95)",
+            },
+        });
+
+        // Core red dot
+        map.addLayer({
+            id: LAYER_CORE_ID,
+            type: "circle",
+            source: SOURCE_ID,
+            paint: {
+                "circle-radius": 7,
+                "circle-color": "#ff6f59",
+            },
+        });
+
+        // Name label
+        map.addLayer({
+            id: LAYER_LABEL_ID,
+            type: "symbol",
+            source: SOURCE_ID,
+            layout: {
+                "text-field": ["get", "name"],
+                "text-size": 12,
+                "text-anchor": "top",
+                "text-offset": [0, 1.2],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+            },
+            paint: {
+                "text-color": "#ffffff",
+                "text-halo-color": "rgba(0, 0, 0, 0.7)",
+                "text-halo-width": 1.5,
+            },
+        });
+    }
+
+    function buildGeoJSON(data: DBlocker[]): GeoJSON.FeatureCollection {
+        return {
+            type: "FeatureCollection",
+            features: data
+                .filter((d) => d.latitude != null && d.longitude != null)
+                .map((d) => ({
+                    type: "Feature" as const,
+                    geometry: {
+                        type: "Point" as const,
+                        coordinates: [d.longitude!, d.latitude!],
+                    },
+                    properties: { id: d.id, name: d.name || d.serial_numb },
+                })),
+        };
+    }
 
     function updateMarkers(data: DBlocker[]) {
         if (!map) return;
-        const incomingIds = new Set(data.map((loc) => loc.id));
 
-        // Cleanup removed markers
-        for (const [id, marker] of markers) {
+        // 1. Update native GeoJSON source (perfectly synced with tiles)
+        const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource;
+        if (source) {
+            source.setData(buildGeoJSON(data));
+        }
+
+        // 2. Update HTML overlay markers (radar animation only)
+        const incomingIds = new Set(data.map((d) => d.id));
+
+        // Cleanup removed
+        for (const [id, marker] of overlayMarkers) {
             if (!incomingIds.has(id)) {
                 marker.remove();
-                markers.delete(id);
+                overlayMarkers.delete(id);
                 previousConfigMap.delete(id);
             }
         }
 
-        // Add/Update markers
         data.forEach((dblocker) => {
             if (dblocker.latitude == null || dblocker.longitude == null) return;
 
-            // 1. Identify constant fields (id, serial_numb) vs changeable fields
-            const { id, serial_numb, ...changeableData } = dblocker;
-            // 2. Separate position from other visual config to optimize updates
-            const { latitude, longitude, ...visualData } = changeableData;
+            const { id, serial_numb, latitude, longitude, ...visualData } = dblocker;
             const currentConfigSig = JSON.stringify(visualData);
             const prevConfigSig = previousConfigMap.get(dblocker.id);
-            const hasMarker = markers.has(dblocker.id);
+            const hasMarker = overlayMarkers.has(dblocker.id);
 
-            // CASE 1: Config Changed OR New Marker -> Full Re-Render
             if (!hasMarker || currentConfigSig !== prevConfigSig) {
-                // If it existed but config changed (e.g. user flipped switch), remove old one
-                if (hasMarker) markers.get(dblocker.id)?.remove();
+                if (hasMarker) overlayMarkers.get(dblocker.id)?.remove();
 
-                const el = createMarkerElement(dblocker);
-                const newMarker = new maplibregl.Marker({ element: el })
+                const el = createRadarElement(dblocker);
+                const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
                     .setLngLat([dblocker.longitude, dblocker.latitude])
                     .addTo(map!);
 
-                markers.set(dblocker.id, newMarker);
+                overlayMarkers.set(dblocker.id, marker);
                 previousConfigMap.set(dblocker.id, currentConfigSig);
-            }
-            // CASE 2: Config is same, just move it (Performance optimization)
-            else if (hasMarker) {
-                markers
-                    .get(dblocker.id)
+            } else if (hasMarker) {
+                overlayMarkers.get(dblocker.id)
                     ?.setLngLat([dblocker.longitude, dblocker.latitude]);
             }
         });
     }
 
-    function createMarkerElement(dblocker: DBlocker) {
+    function createRadarElement(dblocker: DBlocker) {
+        // Zero-size container — all children use absolute positioning
         const el = document.createElement("div");
-        el.className = "marker-gps";
+        el.className = "marker-radar";
         const baseRotation = dblocker.angle_start || 0;
         const configs = dblocker.config || [];
         for (let i = 0; i < 6; i++) {
@@ -95,7 +180,6 @@
                 if (sectorConfig.signal_ctrl === false && layer === 0) continue;
                 if (sectorConfig.signal_gps === false && layer === 1) continue;
 
-                // Create 2 ripples per sector for the overlapping effect
                 for (let ripple = 0; ripple < 2; ripple++) {
                     const slice = document.createElement("div");
                     slice.className = "radar-slice";
@@ -107,12 +191,7 @@
                     );
 
                     const scaleWrapper = layer === 1 ? 0.6 : 1.0;
-                    slice.style.setProperty(
-                        "--scale-factor",
-                        `${scaleWrapper}`,
-                    );
-
-                    // Delay the second ripple by -1s so it starts halfway through
+                    slice.style.setProperty("--scale-factor", `${scaleWrapper}`);
                     slice.style.animationDelay = `${ripple * -1}s`;
 
                     el.appendChild(slice);
@@ -120,31 +199,7 @@
             }
         }
 
-        const core = document.createElement("div");
-        core.className = "marker-core";
-        el.appendChild(core);
-
         return el;
-    }
-
-    function updatePixelScale() {
-        if (!map || !mapContainer) return;
-
-        const zoom = map.getZoom();
-        const lat = map.getCenter().lat;
-
-        // Math to convert meters to pixels at current zoom level
-        const metersPerPixel =
-            (156543.03392 * Math.cos((lat * Math.PI) / 180)) /
-            Math.pow(2, zoom);
-
-        // 1km Radius = 2000m Diameter
-        const diameterInMeters = 2000;
-
-        const pixels = diameterInMeters / metersPerPixel;
-
-        // Update the CSS variable
-        mapContainer.style.setProperty("--px-diameter", `${pixels}px`);
     }
 
     function debounceRender(data: DBlocker[]) {
@@ -159,7 +214,6 @@
     }
 
     onMount(() => {
-        // ✨ Initialize using Store value
         map = new maplibregl.Map({
             container: mapContainer,
             style: MAP_STYLES[$settings.mapStyle],
@@ -168,7 +222,6 @@
         });
         map.addControl(new maplibregl.NavigationControl(), "top-left");
 
-        // Fix for "Image " " could not be loaded" error from MapTiler style
         map.on("styleimagemissing", (e) => {
             if (e.id === " " || e.id === "null") {
                 const width = 1;
@@ -178,21 +231,14 @@
             }
         });
 
-        // ✨ Resize Observer: Watches for sidebar changes
         resizeObserver = new ResizeObserver(() => {
             map?.resize();
         });
         resizeObserver.observe(mapContainer);
 
         map.on("load", () => {
-            updatePixelScale();
+            addSourceAndLayers();
 
-            if (map) {
-                map.on("move", updatePixelScale);
-                map.on("zoom", updatePixelScale);
-            }
-
-            // Initial render if data is already in store
             console.log(
                 "DBlocker Store on map load: " + JSON.stringify($dblockerStore),
             );
@@ -203,13 +249,11 @@
 
         return () => {
             resizeObserver?.disconnect();
-            markers.forEach((m) => m.remove());
-            markers.clear();
+            overlayMarkers.forEach((m) => m.remove());
+            overlayMarkers.clear();
             previousConfigMap.clear();
 
             if (map) {
-                map.off("move", updatePixelScale);
-                map.off("zoom", updatePixelScale);
                 map.remove();
             }
         };
@@ -279,44 +323,28 @@
         flex-grow: 1;
     }
 
-    .map-layout :global(.marker-gps) {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        position: relative;
-    }
-
-    .map-layout :global(.marker-core) {
-        width: 18px;
-        height: 18px;
-        background: radial-gradient(
-            circle at 30% 30%,
-            #ffbcae 0%,
-            #ff6f59 52%,
-            #d2361f 100%
-        );
-        border: 2px solid rgba(255, 255, 255, 0.95);
-        box-shadow: 0 0 0 4px rgba(210, 54, 31, 0.18);
-        border-radius: 50%;
-        z-index: 2;
+    /* Zero-size container so MapLibre anchor is always at the exact coordinate */
+    .map-layout :global(.marker-radar) {
+        width: 0;
+        height: 0;
         position: relative;
     }
 
     .map-layout :global(.radar-slice) {
         position: absolute;
-        width: calc(var(--px-diameter) * var(--scale-factor));
-        height: calc(var(--px-diameter) * var(--scale-factor));
+        width: calc(120px * var(--scale-factor));
+        height: calc(120px * var(--scale-factor));
         background-color: var(--color);
 
-        top: 50%;
-        left: 50%;
+        /* Center on the zero-size parent */
+        top: 0;
+        left: 0;
         transform: translate(-50%, -50%) rotate(var(--angle));
         clip-path: polygon(50% 50%, 100% 20%, 100% 80%);
         border-radius: 50%;
 
         pointer-events: none;
 
-        /* Linear makes the ripple overlap smoothly */
         animation: zoom-pulse 2s infinite linear;
     }
 
