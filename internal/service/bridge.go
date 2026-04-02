@@ -73,6 +73,8 @@ func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *Curren
 		return nil, err
 	}
 
+	br.resetRetainedStatus()
+
 	return br, nil
 }
 
@@ -184,6 +186,29 @@ func (b *BridgeService) ResubscribeTrackedTopics() error {
 
 	log.Printf("Resubscribed %d MQTT bridge topics after reconnect", len(topics))
 	return nil
+}
+
+// resetRetainedStatus publishes OFF retained for all tracked /sta topics
+// to clear potentially stale retained messages from the MQTT broker.
+// Connected devices will re-publish their real status shortly after.
+func (b *BridgeService) resetRetainedStatus() {
+	b.mu.RLock()
+	topics := append([]string(nil), b.topics...)
+	b.mu.RUnlock()
+
+	count := 0
+	for _, topic := range topics {
+		if strings.HasSuffix(topic, "/sta") {
+			if err := b.client.Publish(topic, 0, true, []byte("OFF")); err != nil {
+				log.Printf("Failed to reset retained status for %s: %v", topic, err)
+			} else {
+				count++
+			}
+		}
+	}
+	if count > 0 {
+		log.Printf("Reset %d retained /sta messages to OFF", count)
+	}
 }
 
 func (b *BridgeService) Topic() string {
