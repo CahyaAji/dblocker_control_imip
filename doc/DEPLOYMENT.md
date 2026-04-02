@@ -2,6 +2,12 @@
 
 This guide is for deploying this project from your laptop to a real production computer (server/VPS).
 
+```
+```
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+```
+
 ### 1) Prepare the production server
 
 Install Docker and Docker Compose plugin.
