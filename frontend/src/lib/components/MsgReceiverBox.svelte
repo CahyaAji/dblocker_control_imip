@@ -114,7 +114,7 @@
                             {#each [0, 1, 2] as row}
                                 <tr>
                                     <td class="row-label"
-                                        >{row === 2 ? "gps" : "rc"}</td
+                                        >{row === 0 ? "gps" : "rc"}</td
                                     >
                                     {#each Array.from({ length: 6 }, (_, col) => row + col * 3) as idx}
                                         <td>
