@@ -48,9 +48,9 @@
         if (values.length < 19) return null;
 
         const sectors = Array.from({ length: 6 }, (_, s) => ({
-            ctrl1: calculateCurrentA(values[s * 3]),
-            ctrl2: calculateCurrentA(values[s * 3 + 1]),
-            gps: calculateCurrentA(values[s * 3 + 2]),
+            gps: calculateCurrentA(values[s * 3]),
+            ctrl1: calculateCurrentA(values[s * 3 + 1]),
+            ctrl2: calculateCurrentA(values[s * 3 + 2]),
         }));
 
         return { sectors, temperatureC: calculateTemperatureC(values[18]) };
