@@ -229,9 +229,9 @@ func parseRptPayload(payload string) []SectorCurrents {
 	sectors := make([]SectorCurrents, 6)
 	for s := 0; s < 6; s++ {
 		sectors[s] = SectorCurrents{
-			Ctrl1: calculateCurrentA(values[s*3]),
-			Ctrl2: calculateCurrentA(values[s*3+1]),
-			GPS:   calculateCurrentA(values[s*3+2]),
+			GPS:   calculateCurrentA(values[s*3]),
+			Ctrl1: calculateCurrentA(values[s*3+1]),
+			Ctrl2: calculateCurrentA(values[s*3+2]),
 		}
 	}
 
