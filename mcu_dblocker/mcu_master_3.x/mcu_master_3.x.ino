@@ -31,9 +31,9 @@ uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 // Config ========================
 // EDIT PER CONTROLLER ========================
-const char controller_id[] = "250001";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x11, 0x01 };
-IPAddress ip(10, 88, 81, 2);
+const char controller_id[] = "250006";
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x16, 0x06 };
+IPAddress ip(10, 88, 81, 7);
 
 // --- SECURITY SETTINGS ---
 const char UDP_SECRET[] = "p!ml_3rUc35";
