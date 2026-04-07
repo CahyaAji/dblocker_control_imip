@@ -19,11 +19,14 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	dblockerRepo := repository.NewDBlockerRepository(db)
 	scheduleRepo := repository.NewScheduleRepository(db)
 	actionLogRepo := repository.NewActionLogRepository(db)
+	detectorRepo := repository.NewDetectorRepository(db)
+	droneEventRepo := repository.NewDroneEventRepository(db)
 
 	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, actionLogRepo, mqttClient, bridgeService)
 	authHandler := handlerhttp.NewAuthHandler(authService)
 	scheduleHandler := handlerhttp.NewScheduleHandler(scheduleRepo, actionLogRepo, dblockerRepo)
 	actionLogHandler := handlerhttp.NewActionLogHandler(actionLogRepo)
+	detectorHandler := handlerhttp.NewDetectorHandler(detectorRepo, droneEventRepo)
 
 	// Public routes
 	r.POST("/api/auth/login", authHandler.Login)
@@ -67,6 +70,18 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.DELETE("/logs/:id", middleware.AdminRequired(), actionLogHandler.DeleteLog)
 	api.POST("/logs", actionLogHandler.CreateLog)
 
+	// Drone Detectors
+	api.POST("/detectors", detectorHandler.CreateDetector)
+	api.GET("/detectors", detectorHandler.GetDetectors)
+	api.PUT("/detectors/:id", detectorHandler.UpdateDetector)
+	api.DELETE("/detectors/:id", detectorHandler.DeleteDetector)
+
+	// Drone Events
+	api.GET("/drone-events", detectorHandler.GetDroneEvents)
+	api.POST("/drone-events", detectorHandler.CreateDroneEvent)
+	api.DELETE("/drone-events", detectorHandler.DeleteDroneEventsByDate)
+	api.PUT("/detectors/status", detectorHandler.UpdateDetectorStatus)
+
 	//! make sure frontend is built first: npm run build (inside frontend/)
 
 	frontendDist := resolveFrontendDistPath()
@@ -77,6 +92,9 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 		})
 		r.GET("/logs", func(ctx *gin.Context) {
 			ctx.File(filepath.Join(frontendDist, "logs.html"))
+		})
+		r.GET("/detections", func(ctx *gin.Context) {
+			ctx.File(filepath.Join(frontendDist, "detections.html"))
 		})
 	} else {
 		r.GET("/dashboard", func(ctx *gin.Context) {

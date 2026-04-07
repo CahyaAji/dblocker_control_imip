@@ -1,7 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzU2NTA2MDAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.eOwCtDHHhB-T5AR7nOj4ldBlN1i9PNOLZXNmR7RTVu4
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzYxMzg0NTEsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.VlM_4c8R1ytDdQrdy9E29hgdiJ9sA0IoMJXEM7WHyyM
 
 ###
 http://localhost:8080/dashboard
@@ -11,8 +11,8 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "aji",
-    "password": "zxcjkl01"
+    "username": "admin",
+    "password": "admin"
 }
 
 ### 0b. Create User (admin only)
@@ -133,15 +133,15 @@ Authorization: Bearer {{token}}
 #     "angle_start": 0
 # }
 
-{
-    "name": "10 Kinrui",
-    "serial_numb": "250010",
-    "ip": "10.88.81.11",
-    "latitude": -2.879332,
-    "longitude": 122.172372,
-    "desc": "Blocker 10 Kinrui",
-    "angle_start": 0
-}
+# {
+#     "name": "10 Kinrui",
+#     "serial_numb": "250010",
+#     "ip": "10.88.81.11",
+#     "latitude": -2.879332,
+#     "longitude": 122.172372,
+#     "desc": "Blocker 10 Kinrui",
+#     "angle_start": 0
+# }
 
 
 ### 2. Get All DBlockers
@@ -217,4 +217,75 @@ Authorization: Bearer {{token}}
 
 ### 9. Apply Preset ON (publish saved preset config to device via MQTT)
 GET {{host}}/api/dblockers/config/preset/6
+Authorization: Bearer {{token}}
+
+#############################
+# DRONE DETECTORS
+#############################
+
+### 10. Register Detector 1 (Runway 13 Bandara)
+POST {{host}}/api/detectors
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "Detector 1",
+    "latitude": -2.81968,
+    "longitude": 122.15309,
+    "host": "10.88.81.14",
+    "port": 5555
+}
+
+### 11. Register Detector 2 (Terminal Tsingsan)
+POST {{host}}/api/detectors
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "Detector 2",
+    "latitude": -2.809000,
+    "longitude": 122.148000,
+    "host": "10.88.81.101",
+    "port": 5555
+}
+
+### 12. Get All Detectors
+GET {{host}}/api/detectors
+Authorization: Bearer {{token}}
+
+### 13. Update Detector
+PUT {{host}}/api/detectors/1
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "name": "Detector 1",
+    "latitude": -2.81968,
+    "longitude": 122.15309,
+    "host": "10.88.81.100",
+    "port": 5555
+}
+
+### 14. Delete Detector
+DELETE {{host}}/api/detectors/1
+Authorization: Bearer {{token}}
+
+#############################
+# DRONE EVENTS
+#############################
+
+### 15. Get Recent Drone Events (all detectors)
+GET {{host}}/api/drone-events?limit=50
+Authorization: Bearer {{token}}
+
+### 16. Get Drone Events by Detector ID
+GET {{host}}/api/drone-events?detector_id=1&limit=50
+Authorization: Bearer {{token}}
+
+### 17. Get Drone Events by Date
+GET {{host}}/api/drone-events?from=2026-04-01&to=2026-04-07&limit=100
+Authorization: Bearer {{token}}
+
+### 18. Delete Drone Events by Date Range
+DELETE {{host}}/api/drone-events?from=2026-04-01&to=2026-04-07
 Authorization: Bearer {{token}}
