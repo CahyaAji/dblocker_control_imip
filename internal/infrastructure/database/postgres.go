@@ -25,7 +25,7 @@ func NewPostgresDB() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&models.DBlocker{}, &models.User{}, &models.Schedule{})
+	err = db.AutoMigrate(&models.DBlocker{}, &models.User{}, &models.Schedule{}, &models.DroneDetector{}, &models.DroneEvent{})
 	if err != nil {
 		return nil, err
 	}
