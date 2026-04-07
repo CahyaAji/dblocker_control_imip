@@ -68,7 +68,7 @@ func StartDroneDetector(label, host string, port int) {
 
 		log.Printf("[%s] connected to %s", label, addr)
 		handleConnection(label, conn)
-		log.Printf("[%s] disconnected, reconnecting in 5s...", label, addr)
+		log.Printf("[%s] disconnected from %s, reconnecting in 5s...", label, addr)
 		time.Sleep(5 * time.Second)
 	}
 }
