@@ -60,7 +60,10 @@ func main() {
 
 	log.Println("dblocker-assist started, polling schedules...")
 
-	// Start drone detector connections (comma-separated "host:port" pairs)
+	// Start drone detector connections from database
+	startDetectorsFromDB()
+
+	// Fallback: also accept env var for detectors not yet in the database
 	if detectors := os.Getenv("DRONE_DETECTORS"); detectors != "" {
 		for i, addr := range strings.Split(detectors, ",") {
 			addr = strings.TrimSpace(addr)
@@ -68,7 +71,7 @@ func main() {
 				continue
 			}
 			host, port := parseHostPort(addr)
-			label := fmt.Sprintf("detector-%d", i+1)
+			label := fmt.Sprintf("detector-env-%d", i+1)
 			go StartDroneDetector(label, host, port)
 		}
 	}
@@ -249,4 +252,46 @@ func parseHostPort(addr string) (string, int) {
 		}
 	}
 	return host, port
+}
+
+type DetectorEntry struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+func startDetectorsFromDB() {
+	req, err := http.NewRequest("GET", backendURL+"/api/detectors", nil)
+	if err != nil {
+		log.Printf("warn: failed to create detector request: %v", err)
+		return
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("warn: failed to fetch detectors from DB: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("warn: detector fetch returned status %d", resp.StatusCode)
+		return
+	}
+
+	var result struct {
+		Data []DetectorEntry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("warn: failed to decode detectors: %v", err)
+		return
+	}
+
+	for _, d := range result.Data {
+		label := fmt.Sprintf("detector-%d-%s", d.ID, d.Name)
+		log.Printf("starting detector %q at %s:%d", label, d.Host, d.Port)
+		go StartDroneDetector(label, d.Host, d.Port)
+	}
 }
