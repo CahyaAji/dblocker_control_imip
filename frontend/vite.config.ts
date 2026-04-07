@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         logs: resolve(__dirname, 'logs.html'),
+        detections: resolve(__dirname, 'detections.html'),
       },
     },
   },

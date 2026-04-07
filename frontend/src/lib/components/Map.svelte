@@ -4,6 +4,11 @@
     import "maplibre-gl/dist/maplibre-gl.css";
     import { settings } from "../store/configStore";
     import { dblockerStore, type DBlocker } from "../store/dblockerStore";
+    import {
+        detectorStore,
+        fetchDetectors,
+        type DroneDetector,
+    } from "../store/detectorStore";
 
     let mapContainer: HTMLElement;
     let map = $state<maplibregl.Map>();
@@ -21,6 +26,12 @@
     const LAYER_BORDER_ID = "dblockers-border";
     const LAYER_LABEL_ID = "dblockers-label";
 
+    const DET_SOURCE_ID = "detectors-source";
+    const DET_LAYER_GLOW_ID = "detectors-glow";
+    const DET_LAYER_BORDER_ID = "detectors-border";
+    const DET_LAYER_CORE_ID = "detectors-core";
+    const DET_LAYER_LABEL_ID = "detectors-label";
+
     const MAP_STYLES = {
         normal: "https://api.maptiler.com/maps/openstreetmap/style.json?key=aUOEn1bA48mz3xc3pL4N",
         hybrid: "https://api.maptiler.com/maps/hybrid/style.json?key=aUOEn1bA48mz3xc3pL4N",
@@ -31,12 +42,20 @@
     });
 
     $effect(() => {
+        if (map && $detectorStore.length > 0)
+            updateDetectorMarkers($detectorStore);
+    });
+
+    $effect(() => {
         if (map && $settings.mapStyle) {
             map.setStyle(MAP_STYLES[$settings.mapStyle]);
             // Re-add source/layers after style change
             map.once("style.load", () => {
                 addSourceAndLayers();
+                addDetectorSourceAndLayers();
                 if ($dblockerStore.length > 0) updateMarkers($dblockerStore);
+                if ($detectorStore.length > 0)
+                    updateDetectorMarkers($detectorStore);
             });
         }
     });
@@ -103,6 +122,110 @@
         });
     }
 
+    function addDetectorSourceAndLayers() {
+        if (!map || map.getSource(DET_SOURCE_ID)) return;
+
+        map.addSource(DET_SOURCE_ID, {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+        });
+
+        map.addLayer({
+            id: DET_LAYER_GLOW_ID,
+            type: "circle",
+            source: DET_SOURCE_ID,
+            paint: {
+                "circle-radius": 14,
+                "circle-color": "rgba(0, 200, 255, 0.15)",
+                "circle-blur": 0.5,
+            },
+        });
+
+        map.addLayer({
+            id: DET_LAYER_BORDER_ID,
+            type: "circle",
+            source: DET_SOURCE_ID,
+            paint: {
+                "circle-radius": 10,
+                "circle-color": "rgba(255, 255, 255, 0.95)",
+            },
+        });
+
+        map.addLayer({
+            id: DET_LAYER_CORE_ID,
+            type: "circle",
+            source: DET_SOURCE_ID,
+            paint: {
+                "circle-radius": 8,
+                "circle-color": [
+                    "case",
+                    ["==", ["get", "status"], "online"],
+                    "#22c55e",
+                    "#666666",
+                ],
+            },
+        });
+
+        map.addLayer({
+            id: DET_LAYER_LABEL_ID,
+            type: "symbol",
+            source: DET_SOURCE_ID,
+            layout: {
+                "text-field": [
+                    "concat",
+                    ["get", "name"],
+                    " (",
+                    ["get", "status"],
+                    ")",
+                ],
+                "text-size": 12,
+                "text-anchor": "top",
+                "text-offset": [0, 1.4],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+            },
+            paint: {
+                "text-color": [
+                    "case",
+                    ["==", ["get", "status"], "online"],
+                    "#22c55e",
+                    "#999999",
+                ],
+                "text-halo-color": "rgba(0, 0, 0, 0.8)",
+                "text-halo-width": 1.5,
+            },
+        });
+    }
+
+    function buildDetectorGeoJSON(
+        data: DroneDetector[],
+    ): GeoJSON.FeatureCollection {
+        return {
+            type: "FeatureCollection",
+            features: data
+                .filter((d) => d.latitude != null && d.longitude != null)
+                .map((d) => ({
+                    type: "Feature" as const,
+                    geometry: {
+                        type: "Point" as const,
+                        coordinates: [d.longitude, d.latitude],
+                    },
+                    properties: {
+                        id: d.id,
+                        name: d.name,
+                        status: d.status || "offline",
+                    },
+                })),
+        };
+    }
+
+    function updateDetectorMarkers(data: DroneDetector[]) {
+        if (!map) return;
+        const source = map.getSource(DET_SOURCE_ID) as maplibregl.GeoJSONSource;
+        if (source) {
+            source.setData(buildDetectorGeoJSON(data));
+        }
+    }
+
     function buildGeoJSON(data: DBlocker[]): GeoJSON.FeatureCollection {
         return {
             type: "FeatureCollection",
@@ -114,7 +237,10 @@
                         type: "Point" as const,
                         coordinates: [d.longitude!, d.latitude!],
                     },
-                    properties: { id: d.id, name: d.name || d.serial_numb },
+                    properties: {
+                        id: d.id,
+                        name: d.name,
+                    },
                 })),
         };
     }
@@ -143,7 +269,8 @@
         data.forEach((dblocker) => {
             if (dblocker.latitude == null || dblocker.longitude == null) return;
 
-            const { id, serial_numb, latitude, longitude, ...visualData } = dblocker;
+            const { id, serial_numb, latitude, longitude, ...visualData } =
+                dblocker;
             const currentConfigSig = JSON.stringify(visualData);
             const prevConfigSig = previousConfigMap.get(dblocker.id);
             const hasMarker = overlayMarkers.has(dblocker.id);
@@ -152,14 +279,18 @@
                 if (hasMarker) overlayMarkers.get(dblocker.id)?.remove();
 
                 const el = createRadarElement(dblocker);
-                const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+                const marker = new maplibregl.Marker({
+                    element: el,
+                    anchor: "center",
+                })
                     .setLngLat([dblocker.longitude, dblocker.latitude])
                     .addTo(map!);
 
                 overlayMarkers.set(dblocker.id, marker);
                 previousConfigMap.set(dblocker.id, currentConfigSig);
             } else if (hasMarker) {
-                overlayMarkers.get(dblocker.id)
+                overlayMarkers
+                    .get(dblocker.id)
                     ?.setLngLat([dblocker.longitude, dblocker.latitude]);
             }
         });
@@ -191,7 +322,10 @@
                     );
 
                     const scaleWrapper = layer === 1 ? 0.6 : 1.0;
-                    slice.style.setProperty("--scale-factor", `${scaleWrapper}`);
+                    slice.style.setProperty(
+                        "--scale-factor",
+                        `${scaleWrapper}`,
+                    );
                     slice.style.animationDelay = `${ripple * -1}s`;
 
                     el.appendChild(slice);
@@ -238,6 +372,8 @@
 
         map.on("load", () => {
             addSourceAndLayers();
+            addDetectorSourceAndLayers();
+            fetchDetectors();
 
             console.log(
                 "DBlocker Store on map load: " + JSON.stringify($dblockerStore),

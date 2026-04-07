@@ -8,6 +8,10 @@
   import { authStore, logout, verifyToken } from "./lib/store/authStore";
   import { settings } from "./lib/store/configStore";
   import { startPolling, stopPolling } from "./lib/store/dblockerStore";
+  import {
+    startDetectorPolling,
+    stopDetectorPolling,
+  } from "./lib/store/detectorStore";
 
   let isResizing = $state(false);
   let activeMsgTab = $state<"receiver" | "status">("receiver");
@@ -23,7 +27,11 @@
   $effect(() => {
     if ($authStore.token) {
       startPolling(2000);
-      return () => stopPolling();
+      startDetectorPolling(10000);
+      return () => {
+        stopPolling();
+        stopDetectorPolling();
+      };
     }
   });
 
@@ -67,166 +75,252 @@
 {#if !$authStore.token}
   <LoginPage />
 {:else}
-<div class="app-container">
-  <main>
-    <div class="map-area">
-      <Map />
-    </div>
+  <div class="app-container">
+    <main>
+      <div class="map-area">
+        <Map />
+      </div>
 
-    <div class="sidebar-wrapper">
-      {#if $settings.sidebarExpanded}
-        <button
-          type="button"
-          class="resizer"
-          class:active={isResizing}
-          onmousedown={startResize}
-          aria-label="Resize sidebar"
-        ></button>
-      {/if}
-
-      <aside
-        style={$settings.sidebarExpanded
-          ? `width: ${$settings.sidebarWidth}px`
-          : "width: 50px"}
-        class:resizing={isResizing}
-      >
-        <div class="sidebar-header">
+      <div class="sidebar-wrapper">
+        {#if $settings.sidebarExpanded}
           <button
-            class="hamburger"
-            onclick={toggleSidebar}
-            aria-label="Toggle Sidebar">☰</button
-          >
-          {#if $settings.sidebarExpanded}
-            <div class="header-actions">
-              {#if $authStore.user?.is_admin}
+            type="button"
+            class="resizer"
+            class:active={isResizing}
+            onmousedown={startResize}
+            aria-label="Resize sidebar"
+          ></button>
+        {/if}
+
+        <aside
+          style={$settings.sidebarExpanded
+            ? `width: ${$settings.sidebarWidth}px`
+            : "width: 50px"}
+          class:resizing={isResizing}
+        >
+          <div class="sidebar-header">
+            <button
+              class="hamburger"
+              onclick={toggleSidebar}
+              aria-label="Toggle Sidebar">☰</button
+            >
+            {#if $settings.sidebarExpanded}
+              <div class="header-actions">
+                {#if $authStore.user?.is_admin}
+                  <button
+                    class="icon-btn"
+                    onclick={() => (showUserMgmt = !showUserMgmt)}
+                    aria-label="User Management"
+                    title="User Management"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="18"
+                      height="18"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      ><path
+                        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"
+                      /><circle cx="9" cy="7" r="4" /><path
+                        d="M23 21v-2a4 4 0 0 0-3-3.87"
+                      /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg
+                    >
+                  </button>
+                {/if}
+                <a
+                  class="icon-btn"
+                  href="/detections"
+                  aria-label="Drone Detections"
+                  title="Drone Detections"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    ><circle cx="12" cy="12" r="10" /><circle
+                      cx="12"
+                      cy="12"
+                      r="6"
+                    /><circle cx="12" cy="12" r="2" /><line
+                      x1="12"
+                      y1="2"
+                      x2="12"
+                      y2="4"
+                    /><line x1="12" y1="20" x2="12" y2="22" /><line
+                      x1="2"
+                      y1="12"
+                      x2="4"
+                      y2="12"
+                    /><line x1="20" y1="12" x2="22" y2="12" /></svg
+                  >
+                </a>
+                <a
+                  class="icon-btn"
+                  href="/logs"
+                  aria-label="Action Logs"
+                  title="Action Logs"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    ><path
+                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
+                    /><polyline points="14 2 14 8 20 8" /><line
+                      x1="16"
+                      y1="13"
+                      x2="8"
+                      y2="13"
+                    /><line x1="16" y1="17" x2="8" y2="17" /><polyline
+                      points="10 9 9 9 8 9"
+                    /></svg
+                  >
+                </a>
                 <button
                   class="icon-btn"
-                  onclick={() => (showUserMgmt = !showUserMgmt)}
-                  aria-label="User Management"
-                  title="User Management"
+                  onclick={logout}
+                  aria-label="Logout"
+                  title="Logout ({$authStore.user?.username})"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    ><path
+                      d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"
+                    /><polyline points="16 17 21 12 16 7" /><line
+                      x1="21"
+                      y1="12"
+                      x2="9"
+                      y2="12"
+                    /></svg
+                  >
                 </button>
-              {/if}
-              <a
-                class="icon-btn"
-                href="/logs"
-                aria-label="Action Logs"
-                title="Action Logs"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-              </a>
-              <button
-                class="icon-btn"
-                onclick={logout}
-                aria-label="Logout"
-                title="Logout ({$authStore.user?.username})"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-              </button>
-              <button
-                class="theme-toggle"
-                onclick={toggleTheme}
-                aria-label="Toggle Theme"
-              >
-              {#if $settings.theme === "dark"}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  ><circle cx="12" cy="12" r="5"></circle><line
-                    x1="12"
-                    y1="1"
-                    x2="12"
-                    y2="3"
-                  ></line><line x1="12" y1="21" x2="12" y2="23"></line><line
-                    x1="4.22"
-                    y1="4.22"
-                    x2="5.64"
-                    y2="5.64"
-                  ></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"
-                  ></line><line x1="1" y1="12" x2="3" y2="12"></line><line
-                    x1="21"
-                    y1="12"
-                    x2="23"
-                    y2="12"
-                  ></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"
-                  ></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"
-                  ></line></svg
+                <button
+                  class="theme-toggle"
+                  onclick={toggleTheme}
+                  aria-label="Toggle Theme"
                 >
-              {:else}
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  ><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
-                  ></path></svg
-                >
-              {/if}
-            </button>
-            </div>
-          {/if}
-        </div>
-        <div class="sidebar-content">
-          {#if $settings.sidebarExpanded}
-            {#if showUserMgmt && $authStore.user?.is_admin}
-              <UserManagement />
-            {:else}
-              <SideMenu />
+                  {#if $settings.theme === "dark"}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      ><circle cx="12" cy="12" r="5"></circle><line
+                        x1="12"
+                        y1="1"
+                        x2="12"
+                        y2="3"
+                      ></line><line x1="12" y1="21" x2="12" y2="23"></line><line
+                        x1="4.22"
+                        y1="4.22"
+                        x2="5.64"
+                        y2="5.64"
+                      ></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"
+                      ></line><line x1="1" y1="12" x2="3" y2="12"></line><line
+                        x1="21"
+                        y1="12"
+                        x2="23"
+                        y2="12"
+                      ></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"
+                      ></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"
+                      ></line></svg
+                    >
+                  {:else}
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      ><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"
+                      ></path></svg
+                    >
+                  {/if}
+                </button>
+              </div>
             {/if}
-          {/if}
-        </div>
-      </aside>
+          </div>
+          <div class="sidebar-content">
+            {#if $settings.sidebarExpanded}
+              {#if showUserMgmt && $authStore.user?.is_admin}
+                <UserManagement />
+              {:else}
+                <SideMenu />
+              {/if}
+            {/if}
+          </div>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div class="dev-panel msg-panel" role="region" aria-label="Message panel">
+    <div class="msg-tabs" role="tablist" aria-label="Message tabs">
+      <button
+        type="button"
+        class="msg-tab"
+        class:active={activeMsgTab === "receiver"}
+        role="tab"
+        aria-selected={activeMsgTab === "receiver"}
+        onclick={() => (activeMsgTab = "receiver")}
+      >
+        Receiver
+      </button>
+      <button
+        type="button"
+        class="msg-tab"
+        class:active={activeMsgTab === "status"}
+        role="tab"
+        aria-selected={activeMsgTab === "status"}
+        onclick={() => (activeMsgTab = "status")}
+      >
+        Status
+      </button>
     </div>
-  </main>
-</div>
 
-<div class="dev-panel msg-panel" role="region" aria-label="Message panel">
-  <div class="msg-tabs" role="tablist" aria-label="Message tabs">
-    <button
-      type="button"
-      class="msg-tab"
-      class:active={activeMsgTab === "receiver"}
-      role="tab"
-      aria-selected={activeMsgTab === "receiver"}
-      onclick={() => (activeMsgTab = "receiver")}
-    >
-      Receiver
-    </button>
-    <button
-      type="button"
-      class="msg-tab"
-      class:active={activeMsgTab === "status"}
-      role="tab"
-      aria-selected={activeMsgTab === "status"}
-      onclick={() => (activeMsgTab = "status")}
-    >
-      Status
-    </button>
+    <div class="msg-tab-content">
+      {#if activeMsgTab === "receiver"}
+        <!-- For testing only -->
+        <!-- <SubDemo /> -->
+        <MsgReceiverBox />
+      {:else}
+        <MsgStatusBox />
+      {/if}
+    </div>
   </div>
-
-  <div class="msg-tab-content">
-    {#if activeMsgTab === "receiver"}
-      <!-- For testing only -->
-      <!-- <SubDemo /> -->
-      <MsgReceiverBox />
-    {:else}
-      <MsgStatusBox />
-    {/if}
-  </div>
-</div>
 {/if}
 
 <style>
