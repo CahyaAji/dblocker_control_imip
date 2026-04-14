@@ -47,11 +47,9 @@ sudo ufw enable
 **Option A — Clone from Git (recommended):**
 
 ```bash
-sudo mkdir -p /opt
-cd /opt
-sudo git clone https://github.com/YOUR_ORG/YOUR_REPO.git dblocker_control_imip
-sudo chown -R $USER:$USER /opt/dblocker_control_imip
-cd /opt/dblocker_control_imip
+cd ~
+git clone https://github.com/YOUR_ORG/YOUR_REPO.git dblocker_control_imip
+cd ~/dblocker_control_imip
 ```
 
 For a private repo, use SSH:
@@ -64,10 +62,10 @@ git clone git@github.com:YOUR_ORG/YOUR_REPO.git dblocker_control_imip
 
 ```bash
 # On your laptop
-scp -r /path/to/dblocker_control_imip user@SERVER_IP:/opt/dblocker_control_imip
+scp -r /path/to/dblocker_control_imip user@SERVER_IP:~/dblocker_control_imip
 
 # Then on the server
-cd /opt/dblocker_control_imip
+cd ~/dblocker_control_imip
 ```
 
 ### Step 4 — Create the `.env.prod` file
@@ -154,7 +152,7 @@ Log in with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env.prod`.
 ### Updating / Redeploying
 
 ```bash
-cd /opt/dblocker_control_imip
+cd ~/dblocker_control_imip
 git pull
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
