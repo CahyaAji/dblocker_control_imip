@@ -94,12 +94,13 @@ Fill in **every** `CHANGE_ME_*` value. Here is what each variable does:
 
 The Mosquitto broker needs a password file that matches the `MQTT_USERNAME` and `MQTT_PASSWORD` in your `.env.prod`.
 
-Replace `YOUR_MQTT_PASSWORD` below with the exact `MQTT_PASSWORD` value from `.env.prod`:
+Replace `YOUR_MQTT_PASSWORD` below with the exact `MQTT_PASSWORD` value from `.env.prod`.
+Use **single quotes** around the password to avoid issues with special characters (`!`, `` ` ``, `;`, etc.):
 
 ```bash
 # Generate the password file
 docker run --rm -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
-  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD"
+  mosquitto_passwd -b -c /mosquitto/config/passwordfile 'DBL0KER' 'YOUR_MQTT_PASSWORD'
 
 # Set correct ownership and permissions
 docker run --rm -v "$PWD/mosquitto/config:/mosquitto/config" alpine \
@@ -130,14 +131,16 @@ This starts 4 containers:
 Check container status:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
 All containers should show `Up` status. Check logs:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f app mosquitto postgres
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml logs -f app mosquitto postgres
 ```
+
+> **Tip:** Always include `--env-file .env.prod` in every `docker compose` command, not just `up`.
 
 Open the dashboard in your browser:
 
@@ -201,7 +204,7 @@ docker image inspect dblocker_control_imip-app:latest --format '{{.Architecture}
 
 ```bash
 docker run --rm -u 0 -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
-  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD"
+  mosquitto_passwd -b -c /mosquitto/config/passwordfile 'DBL0KER' 'YOUR_MQTT_PASSWORD'
 docker run --rm -u 0 -v "$PWD/mosquitto/config:/mosquitto/config" alpine \
   sh -c "chown 1883:1883 /mosquitto/config/passwordfile && chmod 700 /mosquitto/config/passwordfile"
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml restart mosquitto app
@@ -211,8 +214,8 @@ docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod
 
 ```bash
 # Check if app is running
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
 
 # Test locally on the server
 curl -i http://127.0.0.1:8080/dashboard
