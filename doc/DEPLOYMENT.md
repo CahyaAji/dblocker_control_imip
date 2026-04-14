@@ -86,7 +86,7 @@ Fill in **every** `CHANGE_ME_*` value. Here is what each variable does:
 | `JWT_SECRET`       | Random secret for JWT tokens. Generate with: `openssl rand -hex 32` |
 | `API_KEY`          | Shared key between app and assist service. Generate with: `openssl rand -hex 32` |
 | `ADMIN_PASSWORD`   | Password for the default admin user                            |
-| `DRONE_DETECTORS`  | Comma-separated `host:port` pairs (e.g. `10.88.81.14:5555`)   |
+| `DRONE_DETECTORS`  | *(optional)* Fallback detector list. Detectors are normally managed via the dashboard/API — only set this if you need detectors before the DB is populated |
 
 > **Do not commit `.env.prod` to Git.** It is already in `.gitignore`.
 
