@@ -1,35 +1,50 @@
 ## Production Deployment Guide
 
-This guide is for deploying this project from your laptop to a real production computer (server/VPS).
+Step-by-step guide to deploy this project on a production server (VPS, bare metal, Raspberry Pi, etc.).
 
-```
-```
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
-```
+> **Quick command** (after all steps are done):
+> ```
+> docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+> ```
 
-### 1) Prepare the production server
+---
 
-Install Docker and Docker Compose plugin.
+### Step 1 — Install Docker on the server
 
 ```bash
+# Install Docker (follow official docs for your distro, or use the convenience script)
+curl -fsSL https://get.docker.com | sudo sh
+
+# Enable and start Docker
 sudo systemctl enable --now docker
+
+# Verify
 sudo docker --version
 sudo docker compose version
 ```
 
-Open firewall ports:
-- `22` for SSH
-- `8080` for app API (or use reverse proxy later)
-- `1883` only if external devices need direct MQTT access
+### Step 2 — Open firewall ports
 
-### 2) Get project code on server
+Open only the ports you need:
 
-You can use either method below.
+| Port   | Purpose                                  | Required? |
+|--------|------------------------------------------|-----------|
+| `22`   | SSH access                               | Yes       |
+| `8080` | App API + dashboard                      | Yes       |
+| `1883` | MQTT (only if external devices connect)  | Optional  |
 
-#### Option A: Clone from GitHub (recommended)
+Example with `ufw`:
 
-On server:
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 8080/tcp
+sudo ufw allow 1883/tcp   # only if external devices need direct MQTT
+sudo ufw enable
+```
+
+### Step 3 — Get the project code on the server
+
+**Option A — Clone from Git (recommended):**
 
 ```bash
 sudo mkdir -p /opt
@@ -39,84 +54,104 @@ sudo chown -R $USER:$USER /opt/dblocker_control_imip
 cd /opt/dblocker_control_imip
 ```
 
-If the repository is private, use SSH URL instead:
+For a private repo, use SSH:
 
 ```bash
 git clone git@github.com:YOUR_ORG/YOUR_REPO.git dblocker_control_imip
 ```
 
-#### Option B: Copy from laptop using scp
-
-From your laptop:
+**Option B — Copy from your laptop:**
 
 ```bash
+# On your laptop
 scp -r /path/to/dblocker_control_imip user@SERVER_IP:/opt/dblocker_control_imip
-```
 
-On server:
-
-```bash
+# Then on the server
 cd /opt/dblocker_control_imip
 ```
 
-### 3) Create production environment file
+### Step 4 — Create the `.env.prod` file
+
+Copy the example file and edit it:
 
 ```bash
 cp .env.prod.example .env.prod
 nano .env.prod
 ```
 
-Set strong production values in `.env.prod`, especially:
-- `MQTT_PASSWORD`
-- `DB_PASSWORD`
+Fill in **every** `CHANGE_ME_*` value. Here is what each variable does:
 
-Do not commit `.env.prod` into Git.
+| Variable           | What to set                                                    |
+|--------------------|----------------------------------------------------------------|
+| `MQTT_PASSWORD`    | Strong password for the MQTT broker                            |
+| `DB_PASSWORD`      | Strong password for PostgreSQL                                 |
+| `JWT_SECRET`       | Random secret for JWT tokens. Generate with: `openssl rand -hex 32` |
+| `API_KEY`          | Shared key between app and assist service. Generate with: `openssl rand -hex 32` |
+| `ADMIN_PASSWORD`   | Password for the default admin user                            |
+| `DRONE_DETECTORS`  | Comma-separated `host:port` pairs (e.g. `10.88.81.14:5555`)   |
 
-### 4) Generate MQTT password file on server
+> **Do not commit `.env.prod` to Git.** It is already in `.gitignore`.
 
-Run this on the production server (uses your intended username/password):
+### Step 5 — Generate the MQTT password file
+
+The Mosquitto broker needs a password file that matches the `MQTT_USERNAME` and `MQTT_PASSWORD` in your `.env.prod`.
+
+Replace `YOUR_MQTT_PASSWORD` below with the exact `MQTT_PASSWORD` value from `.env.prod`:
 
 ```bash
+# Generate the password file
 docker run --rm -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
-  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD_FROM_ENV"
-```
+  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD"
 
-Set secure permissions:
-
-```bash
+# Set correct ownership and permissions
 docker run --rm -v "$PWD/mosquitto/config:/mosquitto/config" alpine \
   sh -c "chown 1883:1883 /mosquitto/config/passwordfile && chmod 700 /mosquitto/config/passwordfile"
 ```
 
-### 5) Start in production mode
+> The username `DBL0KER` must match `MQTT_USERNAME` in `.env.prod` (default is `DBL0KER`).
 
-This project supports both ARM (for example Raspberry Pi) and AMD64 hosts.
-The Dockerfile builds the Go binary for the host architecture automatically.
+### Step 6 — Build and start all services
+
+This project supports both ARM (Raspberry Pi) and AMD64. The Dockerfile detects the host architecture automatically.
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-Check status:
+This starts 4 containers:
+
+| Container             | Role                              |
+|-----------------------|-----------------------------------|
+| `dblocker-app`        | Go backend + Svelte frontend      |
+| `dblocker-assist-app` | Drone detector assist service     |
+| `dblocker-mqtt`       | Mosquitto MQTT broker             |
+| `dblocker-postgres`   | PostgreSQL database               |
+
+### Step 7 — Verify everything is running
+
+Check container status:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
 ```
 
-Check logs:
+All containers should show `Up` status. Check logs:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f app mosquitto postgres
 ```
 
-### 6) How clients connect to MQTT
+Open the dashboard in your browser:
 
-- Inside Docker (your Go app): `tcp://mosquitto:1883`
-- Outside Docker (other devices): `tcp://SERVER_IP:1883`
+```
+http://SERVER_IP:8080/dashboard
+```
 
-Both are correct for different network contexts.
+Log in with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env.prod`.
 
-### 7) Update / redeploy later
+---
+
+### Updating / Redeploying
 
 ```bash
 cd /opt/dblocker_control_imip
@@ -124,58 +159,69 @@ git pull
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
-If repository is private over HTTPS, use a GitHub Personal Access Token when prompted,
-or configure SSH keys once and use the SSH remote URL.
+### How clients connect to MQTT
 
-### 8) Backup important data
+| Context                          | Broker address              |
+|----------------------------------|-----------------------------|
+| Inside Docker (the Go app)       | `tcp://mosquitto:1883`      |
+| Outside Docker (MCU / devices)   | `tcp://SERVER_IP:1883`      |
 
-Persisted data locations:
-- Postgres volume: Docker volume `pgdata`
-- Mosquitto data: `mosquitto/data`
-- Mosquitto config + password file: `mosquitto/config`
+### Backup
 
-Back up these regularly.
+Back up these regularly:
 
-### 9) Quick troubleshooting
+| Data              | Location                      |
+|-------------------|-------------------------------|
+| PostgreSQL        | Docker volume `pgdata`        |
+| Mosquitto data    | `mosquitto/data/`             |
+| Mosquitto config  | `mosquitto/config/`           |
+| Environment file  | `.env.prod`                   |
 
-1. App keeps restarting with `exec format error`
+---
 
-- Cause: old image was built for a different CPU architecture.
-- Fix:
+### Troubleshooting
+
+**1. App keeps restarting with `exec format error`**
+
+Old image was built for a different CPU architecture. Rebuild from scratch:
 
 ```bash
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml down
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml build --no-cache --pull app
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml up -d
+```
+
+Verify architecture:
+
+```bash
 docker image inspect dblocker_control_imip-app:latest --format '{{.Architecture}}/{{.Os}}'
 ```
 
-2. App log shows `mqtt connect error: not Authorized`
+**2. App log shows `mqtt connect error: not Authorized`**
 
-- Cause: `MQTT_USERNAME` / `MQTT_PASSWORD` in `.env.prod` do not match `mosquitto/config/passwordfile`.
-- Fix (regenerate passwordfile using the same values from `.env.prod`):
+`MQTT_PASSWORD` in `.env.prod` does not match the password file. Regenerate it:
 
 ```bash
 docker run --rm -u 0 -v "$PWD/mosquitto/config:/mosquitto/config" eclipse-mosquitto:2 \
-  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD_FROM_ENV"
+  mosquitto_passwd -b -c /mosquitto/config/passwordfile "DBL0KER" "YOUR_MQTT_PASSWORD"
 docker run --rm -u 0 -v "$PWD/mosquitto/config:/mosquitto/config" alpine \
   sh -c "chown 1883:1883 /mosquitto/config/passwordfile && chmod 700 /mosquitto/config/passwordfile"
 docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml restart mosquitto app
 ```
 
-3. Cannot open `http://SERVER_IP:8080/dashboard`
-
-- Check app status and logs:
+**3. Cannot open `http://SERVER_IP:8080/dashboard`**
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml ps
-docker compose --env-file .env.prod -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
-```
+# Check if app is running
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 app
 
-- Test locally on server first:
-
-```bash
+# Test locally on the server
 curl -i http://127.0.0.1:8080/dashboard
 ```
 
-- If local works but remote fails, check firewall/routing (for example `ufw allow 8080/tcp`).
+If local works but remote doesn't, it's a firewall issue:
+
+```bash
+sudo ufw allow 8080/tcp
+```
