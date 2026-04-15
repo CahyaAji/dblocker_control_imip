@@ -1,10 +1,10 @@
-# @host = http://10.88.81.16:8080
-@host = http://localhost:8080
+@host = http://10.88.81.16:8080
+# @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzYxMzg0NTEsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.VlM_4c8R1ytDdQrdy9E29hgdiJ9sA0IoMJXEM7WHyyM
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzY3NDE3NDIsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.1l8jVhEvMZMFx0MC8AyuUrBLmmBnt-_ZnIR0c-2P-Jw
 
 ###
-http://localhost:8080/dashboard
+http://{{host}}/dashboard
 
 ### 0a. Login (get token)
 POST {{host}}/api/auth/login
