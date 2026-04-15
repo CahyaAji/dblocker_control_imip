@@ -57,8 +57,9 @@ type DroneData struct {
 
 // StartDroneDetector connects to a drone detector device via TCP and parses its binary protocol.
 // It reconnects automatically with exponential backoff on connection failures.
-func StartDroneDetector(label, host string, port int) {
+func StartDroneDetector(label, host string, port int, lat, lng float64) {
 	addr := fmt.Sprintf("%s:%d", host, port)
+	log.Printf("[%s] detector location: %.6f, %.6f (from database)", label, lat, lng)
 	backoff := 5 * time.Second
 	const maxBackoff = 60 * time.Second
 
@@ -284,7 +285,9 @@ func parseDroneData(label string, data []byte) {
 	go postDroneEvent(label, d)
 
 	// Auto-activate blockers based on drone position
-	go autoActivateBlockers(label, d)
+	// Disabled: automatic blocker activation on detection
+	// TODO: re-enable with per-blocker angle logic to handle irregular placement (ground contour)
+	// go autoActivateBlockers(label, d)
 }
 
 func trimNull(s string) string {
@@ -353,102 +356,8 @@ func postDroneEvent(label string, d DroneData) {
 // (adjusted by the blocker's angle_start). It then turns on both GPS and Ctrl
 // signals for that sector.
 func autoActivateBlockers(label string, d DroneData) {
-	if d.DroneLatitude == 0 && d.DroneLongitude == 0 {
-		return // No valid position data
-	}
-
-	// Fetch all dblockers
-	req, err := http.NewRequest("GET", backendURL+"/api/dblockers", nil)
-	if err != nil {
-		log.Printf("[%s] auto-activate: failed to create request: %v", label, err)
-		return
-	}
-	req.Header.Set("X-API-Key", apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("[%s] auto-activate: failed to fetch dblockers: %v", label, err)
-		return
-	}
-	defer resp.Body.Close()
-
-	var result struct {
-		Data []struct {
-			ID         uint             `json:"id"`
-			Name       string           `json:"name"`
-			Lat        float64          `json:"latitude"`
-			Lng        float64          `json:"longitude"`
-			AngleStart int              `json:"angle_start"`
-			Config     []DBlockerConfig `json:"config"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("[%s] auto-activate: failed to decode dblockers: %v", label, err)
-		return
-	}
-
-	droneLat := float64(d.DroneLatitude)
-	droneLng := float64(d.DroneLongitude)
-
-	for _, blocker := range result.Data {
-		// Calculate bearing from blocker to drone
-		bearing := calcBearing(blocker.Lat, blocker.Lng, droneLat, droneLng)
-
-		// Adjust bearing by blocker's angle_start offset
-		adjusted := bearing - float64(blocker.AngleStart)
-		if adjusted < 0 {
-			adjusted += 360
-		}
-
-		// Map to sector index (each sector covers 60°)
-		sectorIdx := int(adjusted/60) % 6
-
-		// Build config: activate the target sector (both GPS & Ctrl ON)
-		var config [6]DBlockerConfig
-		// Preserve existing active sectors
-		for i := 0; i < 6 && i < len(blocker.Config); i++ {
-			config[i] = blocker.Config[i]
-		}
-		config[sectorIdx] = DBlockerConfig{SignalGPS: true, SignalCtrl: true}
-
-		log.Printf("[%s] auto-activate: blocker %q (ID=%d) bearing=%.1f° adjusted=%.1f° → sector %d ON",
-			label, blocker.Name, blocker.ID, bearing, adjusted, sectorIdx)
-
-		// Apply config
-		update := ConfigUpdatePayload{ID: blocker.ID, Config: config}
-		body, _ := json.Marshal(update)
-		putReq, err := http.NewRequest("PUT", backendURL+"/api/dblockers/config", bytes.NewReader(body))
-		if err != nil {
-			log.Printf("[%s] auto-activate: request error: %v", label, err)
-			continue
-		}
-		putReq.Header.Set("Content-Type", "application/json")
-		putReq.Header.Set("X-API-Key", apiKey)
-
-		putResp, err := client.Do(putReq)
-		if err != nil {
-			log.Printf("[%s] auto-activate: PUT error: %v", label, err)
-			continue
-		}
-		putResp.Body.Close()
-
-		// Log the auto action
-		logPayload := ActionLogPayload{
-			Username:     fmt.Sprintf("auto[%s]", label),
-			Action:       "auto_drone_response",
-			DBlockerID:   blocker.ID,
-			DBlockerName: blocker.Name,
-			Config:       config[:],
-		}
-		logBody, _ := json.Marshal(logPayload)
-		logReq, _ := http.NewRequest("POST", backendURL+"/api/logs", bytes.NewReader(logBody))
-		logReq.Header.Set("Content-Type", "application/json")
-		logReq.Header.Set("X-API-Key", apiKey)
-		logResp, err := client.Do(logReq)
-		if err == nil {
-			logResp.Body.Close()
-		}
-	}
+	// TODO: implement per-blocker angle-based activation logic
+	// to handle irregular blocker placement due to ground contour
 }
 
 // calcBearing returns the bearing in degrees (0-360) from point A to point B.
