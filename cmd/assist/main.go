@@ -8,8 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -62,19 +60,6 @@ func main() {
 
 	// Start drone detector connections from database
 	startDetectorsFromDB()
-
-	// Fallback: also accept env var for detectors not yet in the database
-	if detectors := os.Getenv("DRONE_DETECTORS"); detectors != "" {
-		for i, addr := range strings.Split(detectors, ",") {
-			addr = strings.TrimSpace(addr)
-			if addr == "" {
-				continue
-			}
-			host, port := parseHostPort(addr)
-			label := fmt.Sprintf("detector-env-%d", i+1)
-			go StartDroneDetector(label, host, port)
-		}
-	}
 
 	// Track which schedules already executed this minute to avoid duplicates.
 	// Key: "scheduleID:HH:MM"
@@ -242,23 +227,13 @@ func createActionLog(s Schedule) error {
 	return nil
 }
 
-func parseHostPort(addr string) (string, int) {
-	parts := strings.SplitN(addr, ":", 2)
-	host := parts[0]
-	port := 5555
-	if len(parts) == 2 {
-		if p, err := strconv.Atoi(parts[1]); err == nil {
-			port = p
-		}
-	}
-	return host, port
-}
-
 type DetectorEntry struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	ID   uint    `json:"id"`
+	Name string  `json:"name"`
+	Host string  `json:"host"`
+	Port int     `json:"port"`
+	Lat  float64 `json:"latitude"`
+	Lng  float64 `json:"longitude"`
 }
 
 func startDetectorsFromDB() {
@@ -289,9 +264,15 @@ func startDetectorsFromDB() {
 		return
 	}
 
+	if len(result.Data) == 0 {
+		log.Println("no drone detectors configured in database, skipping detection")
+		return
+	}
+
+	log.Printf("found %d drone detector(s), starting connections...", len(result.Data))
 	for _, d := range result.Data {
 		label := fmt.Sprintf("detector-%d-%s", d.ID, d.Name)
-		log.Printf("starting detector %q at %s:%d", label, d.Host, d.Port)
-		go StartDroneDetector(label, d.Host, d.Port)
+		log.Printf("starting detector %q at %s:%d (%.6f, %.6f)", label, d.Host, d.Port, d.Lat, d.Lng)
+		go StartDroneDetector(label, d.Host, d.Port, d.Lat, d.Lng)
 	}
 }
