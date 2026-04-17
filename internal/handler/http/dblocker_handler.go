@@ -82,19 +82,66 @@ func (h *DBlockerHandler) GetDBlockerByID(c *gin.Context) {
 
 func (h *DBlockerHandler) UpdateDBlocker(c *gin.Context) {
 	idParam := c.Param("id")
-
 	id, err := strconv.ParseUint(idParam, 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
 		return
 	}
-	var input models.DBlocker
-	if err := c.ShouldBindJSON(&input); err != nil {
+
+	// Fetch old data
+	old, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "DBlocker not found"})
+		return
+	}
+
+	// Use a patch struct with pointer fields to distinguish omitted vs zero values
+	type patchDBlocker struct {
+		Name         *string                  `json:"name"`
+		SerialNumb   *string                  `json:"serial_numb"`
+		IP           *string                  `json:"ip"`
+		Latitude     *float64                 `json:"latitude"`
+		Longitude    *float64                 `json:"longitude"`
+		Desc         *string                  `json:"desc"`
+		AngleStart   *int                     `json:"angle_start"`
+		Config       *[]models.DBlockerConfig `json:"config"`
+		PresetConfig *[]models.DBlockerConfig `json:"preset_config"`
+	}
+	var patch patchDBlocker
+	if err := c.ShouldBindJSON(&patch); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
+	input := *old // start with old data
 	input.ID = uint(id)
+	if patch.Name != nil {
+		input.Name = *patch.Name
+	}
+	if patch.SerialNumb != nil {
+		input.SerialNumb = *patch.SerialNumb
+	}
+	if patch.IP != nil {
+		input.IP = *patch.IP
+	}
+	if patch.Latitude != nil {
+		input.Lat = *patch.Latitude
+	}
+	if patch.Longitude != nil {
+		input.Lng = *patch.Longitude
+	}
+	if patch.Desc != nil {
+		input.Desc = *patch.Desc
+	}
+	if patch.AngleStart != nil {
+		input.AngleStart = *patch.AngleStart
+	}
+	if patch.Config != nil {
+		input.Config = *patch.Config
+	}
+	if patch.PresetConfig != nil {
+		input.PresetConfig = *patch.PresetConfig
+	}
 
 	if err := h.Repo.Update(&input); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
