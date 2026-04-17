@@ -3,7 +3,7 @@
     import maplibregl from "maplibre-gl";
     import "maplibre-gl/dist/maplibre-gl.css";
     import { settings } from "../store/configStore";
-    import { dblockerStore, type DBlocker } from "../store/dblockerStore";
+    import { dblockerStore, expandedDblockerId, type DBlocker } from "../store/dblockerStore";
     import {
         detectorStore,
         fetchDetectors,
@@ -36,6 +36,15 @@
         normal: "https://api.maptiler.com/maps/openstreetmap/style.json?key=aUOEn1bA48mz3xc3pL4N",
         hybrid: "https://api.maptiler.com/maps/hybrid/style.json?key=aUOEn1bA48mz3xc3pL4N",
     };
+
+    $effect(() => {
+        if (map) {
+            const expandedId = $expandedDblockerId;
+            overlayMarkers.forEach((marker, id) => {
+                marker.getElement().classList.toggle("show-sector-labels", id === expandedId);
+            });
+        }
+    });
 
     $effect(() => {
         if (map && $dblockerStore.length > 0) debounceRender($dblockerStore);
@@ -279,6 +288,10 @@
                 if (hasMarker) overlayMarkers.get(dblocker.id)?.remove();
 
                 const el = createRadarElement(dblocker);
+                // Immediately apply show-sector-labels if this is the expanded marker
+                if ($expandedDblockerId === dblocker.id) {
+                    el.classList.add("show-sector-labels");
+                }
                 const marker = new maplibregl.Marker({
                     element: el,
                     anchor: "center",
@@ -331,6 +344,17 @@
                     el.appendChild(slice);
                 }
             }
+
+            // Sector number label
+            const label = document.createElement("div");
+            label.className = "sector-label";
+            label.textContent = `${i + 1}`;
+            const labelAngle = angle;
+            const labelRadius = 40;
+            const rad = (labelAngle * Math.PI) / 180;
+            label.style.left = `${Math.cos(rad) * labelRadius}px`;
+            label.style.top = `${Math.sin(rad) * labelRadius}px`;
+            el.appendChild(label);
         }
 
         return el;
@@ -482,6 +506,29 @@
         pointer-events: none;
 
         animation: zoom-pulse 2s infinite linear;
+    }
+
+    .map-layout :global(.sector-label) {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        font-size: 14px;
+        font-weight: 700;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.75);
+        width: 22px;
+        height: 22px;
+        line-height: 22px;
+        text-align: center;
+        border-radius: 50%;
+        pointer-events: none;
+        z-index: 1;
+        display: none;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        border: 1.5px solid #fff2;
+    }
+
+    .map-layout :global(.show-sector-labels .sector-label) {
+        display: block;
     }
 
     @keyframes zoom-pulse {

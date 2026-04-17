@@ -2,10 +2,9 @@
     import { onMount, onDestroy } from "svelte";
     import DblockerCardActions from "./DblockerCardActions.svelte";
     import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
-    import type { DBlocker, DBlockerConfig } from "../store/dblockerStore";
-    import { updateDBlockerConfig, turnOffAll, presetOn } from "../store/dblockerStore";
+    import type { DBlocker, DBlockerConfig, SectorCurrents } from "../store/dblockerStore";
+    import { updateDBlockerConfig, turnOffAll, presetOn, expandedDblockerId } from "../store/dblockerStore";
     import { bridgeStore, subscribeBridge, unsubscribeBridge } from "../store/bridgeStore";
-    import type { SectorCurrents } from "../store/dblockerStore";
     import { API_BASE } from "../utils/api";
 
     const calculateCurrentA = (rawADC: number): number => {
@@ -99,7 +98,9 @@
         ? `Error: ${monitorErrors.join(', ')} current lower than expected`
         : "Normal";
 
-    let isExpanded = false;
+    
+    // Expansion is now controlled by the store
+    $: isExpanded = $expandedDblockerId === dblocker.id;
     let showAdvancedActions = false;
     let hasEdited = false;
 
@@ -122,12 +123,13 @@
         JSON.stringify(editableConfig) !== JSON.stringify(liveConfig);
 
     function toggleExpanded() {
-        isExpanded = !isExpanded;
-        if (isExpanded) {
+        if ($expandedDblockerId === dblocker.id) {
+            showAdvancedActions = false;
+            expandedDblockerId.set(null);
+        } else {
             editableConfig = liveConfig.map((c) => ({ ...c }));
             hasEdited = false;
-        } else {
-            showAdvancedActions = false;
+            expandedDblockerId.set(dblocker.id);
         }
     }
 
@@ -161,12 +163,13 @@
             await updateDBlockerConfig(dblocker.id, editableConfig);
             // Backend snapshots currents at config-apply; start polling for monitor errors
             pollMonitorStatus();
-            // Wait for backend/store to match our local config
+            // Wait for backend/store to match our local config (max 5 seconds)
+            let checkAttempts = 0;
             const checkMatch = () => {
                 const isMatch =
                     JSON.stringify(dblocker.config) ===
                     JSON.stringify(editableConfig);
-                if (isMatch) {
+                if (isMatch || checkAttempts++ >= 50) {
                     hasEdited = false;
                     waitingForBackend = false;
                 } else {

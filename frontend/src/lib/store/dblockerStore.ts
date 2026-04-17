@@ -27,6 +27,7 @@ export interface DBlocker {
 
 // --- STORE ---
 export const dblockerStore = writable<DBlocker[]>([]);
+export const expandedDblockerId = writable<number | null>(null);
 
 // --- CONFIG ---
 let pollingInterval: ReturnType<typeof setInterval> | undefined;
@@ -88,59 +89,6 @@ export async function updateDBlockerConfig(blockerId: number, config: DBlockerCo
         alert('Failed to update dblocker config. Check connection.');
     }
 }
-export async function switchSignal(
-    blockerId: number,
-    sectorIdx: number,
-    type: 'signal_ctrl' | 'signal_gps',
-    newValue: boolean
-) {
-    // A. Optimistic Update: Update UI *immediately* so it feels fast
-    dblockerStore.update(items => items.map(b => {
-        if (b.id !== blockerId) return b;
-
-        // Create deep copy of config to trigger Svelte update
-        const newConfig = [...b.config];
-        newConfig[sectorIdx] = { ...newConfig[sectorIdx], [type]: newValue };
-
-        return { ...b, config: newConfig };
-    }));
-
-    // B. Send Request to Server
-    try {
-        const payload = {
-            id: blockerId,
-            sector: sectorIdx,
-            type: type,   // "signal_ctrl" or "signal_gps"
-            value: newValue // true or false
-        };
-
-        const res = await authFetch(`${API_BASE}/api/dblockers/switch`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) throw new Error("Update failed");
-
-        // Optional: If server returns the new full object, update store again here
-        // const updatedBlocker = await res.json();
-        // dblockerStore.update(...)
-
-    } catch (err) {
-        console.error("Failed to switch signal:", err);
-
-        // C. Rollback: If server failed, flip the switch back!
-        dblockerStore.update(items => items.map(b => {
-            if (b.id !== blockerId) return b;
-            const newConfig = [...b.config];
-            newConfig[sectorIdx] = { ...newConfig[sectorIdx], [type]: !newValue }; // Revert
-            return { ...b, config: newConfig };
-        }));
-
-        alert("Failed to update signal. Check connection.");
-    }
-}
-
 export async function turnOffAll(blockerId: number) {
     try {
         const res = await authFetch(`${API_BASE}/api/dblockers/config/off/${blockerId}`);
@@ -163,18 +111,3 @@ export async function presetOn(blockerId: number) {
     }
 }
 
-export async function updatePresetConfig(blockerId: number, config: DBlockerConfig[]) {
-    try {
-        const payload = { id: blockerId, config };
-        const res = await authFetch(`${API_BASE}/api/dblockers/preset`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error('Failed to save preset config');
-        await fetchDBlockers();
-    } catch (err) {
-        console.error('Failed to save preset config:', err);
-        alert('Failed to save preset config. Check connection.');
-    }
-}
