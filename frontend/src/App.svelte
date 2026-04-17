@@ -15,7 +15,37 @@
 
   let isResizing = $state(false);
   let activeMsgTab = $state<"receiver" | "status">("receiver");
+  let showMsgPanel = $state(true);
   let showUserMgmt = $state(false);
+
+  const MSG_PANEL_SHORTCUT_LABEL = "Ctrl/Cmd+Alt+Shift+M";
+
+  const shouldIgnoreShortcutTarget = (target: EventTarget | null): boolean => {
+    if (!(target instanceof HTMLElement)) return false;
+
+    const tag = target.tagName;
+    return (
+      target.isContentEditable ||
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      tag === "SELECT"
+    );
+  };
+
+  const handleGlobalKeydown = (event: KeyboardEvent) => {
+    if (shouldIgnoreShortcutTarget(event.target)) return;
+
+    const isShortcutPressed =
+      event.key.toLowerCase() === "m" &&
+      event.altKey &&
+      event.shiftKey &&
+      (event.ctrlKey || event.metaKey);
+
+    if (!isShortcutPressed) return;
+
+    event.preventDefault();
+    showMsgPanel = !showMsgPanel;
+  };
 
   // Verify token on mount
   $effect(() => {
@@ -70,7 +100,11 @@
   const stopResize = () => (isResizing = false);
 </script>
 
-<svelte:window onmousemove={handleMouseMove} onmouseup={stopResize} />
+<svelte:window
+  onmousemove={handleMouseMove}
+  onmouseup={stopResize}
+  onkeydown={handleGlobalKeydown}
+/>
 
 {#if !$authStore.token}
   <LoginPage />
@@ -287,40 +321,44 @@
     </main>
   </div>
 
-  <div class="dev-panel msg-panel" role="region" aria-label="Message panel">
-    <div class="msg-tabs" role="tablist" aria-label="Message tabs">
-      <button
-        type="button"
-        class="msg-tab"
-        class:active={activeMsgTab === "receiver"}
-        role="tab"
-        aria-selected={activeMsgTab === "receiver"}
-        onclick={() => (activeMsgTab = "receiver")}
-      >
-        Receiver
-      </button>
-      <button
-        type="button"
-        class="msg-tab"
-        class:active={activeMsgTab === "status"}
-        role="tab"
-        aria-selected={activeMsgTab === "status"}
-        onclick={() => (activeMsgTab = "status")}
-      >
-        Status
-      </button>
-    </div>
+  {#if showMsgPanel}
+    <div class="dev-panel msg-panel" role="region" aria-label="Message panel">
+      <div class="msg-tabs" role="tablist" aria-label="Message tabs">
+        <button
+          type="button"
+          class="msg-tab"
+          class:active={activeMsgTab === "receiver"}
+          role="tab"
+          aria-selected={activeMsgTab === "receiver"}
+          onclick={() => (activeMsgTab = "receiver")}
+        >
+          Receiver
+        </button>
+        <button
+          type="button"
+          class="msg-tab"
+          class:active={activeMsgTab === "status"}
+          role="tab"
+          aria-selected={activeMsgTab === "status"}
+          onclick={() => (activeMsgTab = "status")}
+        >
+          Status
+        </button>
+      </div>
 
-    <div class="msg-tab-content">
-      {#if activeMsgTab === "receiver"}
-        <!-- For testing only -->
-        <!-- <SubDemo /> -->
-        <MsgReceiverBox />
-      {:else}
-        <MsgStatusBox />
-      {/if}
+      <p class="msg-shortcut">Toggle: {MSG_PANEL_SHORTCUT_LABEL}</p>
+
+      <div class="msg-tab-content">
+        {#if activeMsgTab === "receiver"}
+          <!-- For testing only -->
+          <!-- <SubDemo /> -->
+          <MsgReceiverBox />
+        {:else}
+          <MsgStatusBox />
+        {/if}
+      </div>
     </div>
-  </div>
+  {/if}
 {/if}
 
 <style>
@@ -379,6 +417,13 @@
   .msg-tab-content {
     overflow: auto;
     min-height: 0;
+  }
+
+  .msg-shortcut {
+    margin: 0;
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.9;
   }
 
   .app-container {
