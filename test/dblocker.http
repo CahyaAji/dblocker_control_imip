@@ -1,8 +1,7 @@
-@host = http://10.88.81.16:8080
-# @host = http://localhost:8080
+# @host = http://10.88.81.16:8080
+@host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzY3NDE3NDIsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.1l8jVhEvMZMFx0MC8AyuUrBLmmBnt-_ZnIR0c-2P-Jw
-
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzcwMDE0MjksImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.BuDt6XxjEdFDR0nbF_uP62ySARX4HsVonkmmM-wlQ_E
 ###
 http://{{host}}/dashboard
 
@@ -11,8 +10,8 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "admin",
-    "password": "admin"
+    "username": "aji",
+    "password": "zxcjkl01"
 }
 
 ### 0b. Create User (admin only)
@@ -50,7 +49,7 @@ Authorization: Bearer {{token}}
 #     "latitude": -2.793327,
 #     "longitude": 122.131681,
 #     "desc": "Blocker 1 Runway 13 Bandara",
-#     "angle_start": 0
+#     "angle_start": 10
 # }
 
 # {
@@ -60,7 +59,7 @@ Authorization: Bearer {{token}}
 #     "latitude": -2.797881,
 #     "longitude": 122.141956,
 #     "desc": "Blocker 2 Edu Park IMIP",
-#     "angle_start": 0
+#     "angle_start": -15
 # }
 
 # {
@@ -70,7 +69,7 @@ Authorization: Bearer {{token}}
 #     "latitude": -2.803150,
 #     "longitude": 122.136204,
 #     "desc": "Blocker 3 Guest House Bandara",
-#     "angle_start": 0
+#     "angle_start": -15
 # }
 
 # {
@@ -80,7 +79,7 @@ Authorization: Bearer {{token}}
 #     "latitude": -2.820297,
 #     "longitude": 122.128276,
 #     "desc": "Blocker 4 Jalan Hauling CTLI",
-#     "angle_start": 0
+#     "angle_start": -5
 # }
 
 # {
@@ -107,8 +106,8 @@ Authorization: Bearer {{token}}
 #     "name": "7 Jetty Pulau",
 #     "serial_numb": "250007",
 #     "ip": "10.88.81.8",
-#     "latitude": -2.815995,
-#     "longitude": 122.164625,
+#     "latitude": -2.819208,
+#     "longitude": 122.165358,
 #     "desc": "Blocker 7 Jetty Pulau",
 #     "angle_start": 0
 # }
@@ -149,22 +148,16 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 3. Get DBlocker by ID
-GET {{host}}/api/dblockers/1
+GET {{host}}/api/dblockers/13
 Authorization: Bearer {{token}}
 
 ### 4. Update DBlocker by ID
-PUT {{host}}/api/dblockers/14
+PUT {{host}}/api/dblockers/13
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name": "5 Terminal Utama Tsingsan",
-    "serial_numb": "250005",
-    "ip": "10.88.81.6",
-    "latitude": -2.808731,
-    "longitude": 122.147636,
-    "desc": "Blocker 5 Terminal Utama Tsingsan",
-    "angle_start": 0
+    "angle_start": -10
 }
 
 
@@ -179,14 +172,14 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 6,
+    "id": 12,
     "config": [
+        {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
-        {"signal_ctrl": false, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": true}
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
     ]
 }
 
@@ -203,17 +196,20 @@ PUT {{host}}/api/dblockers/preset
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
+# preset
 {
-    "id": 6,
+    "id": 15,
     "config": [
+        {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
-        {"signal_ctrl": false, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": true},
-        {"signal_ctrl": false, "signal_gps": true}
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
     ]
 }
+
+
 
 ### 9. Apply Preset ON (publish saved preset config to device via MQTT)
 GET {{host}}/api/dblockers/config/preset/6
