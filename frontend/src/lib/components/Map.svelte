@@ -4,6 +4,7 @@
     import "maplibre-gl/dist/maplibre-gl.css";
     import { settings } from "../store/configStore";
     import { dblockerStore, expandedDblockerId, type DBlocker } from "../store/dblockerStore";
+    import { bridgeStore } from "../store/bridgeStore";
     import {
         detectorStore,
         fetchDetectors,
@@ -47,7 +48,11 @@
     });
 
     $effect(() => {
-        if (map && $dblockerStore.length > 0) debounceRender($dblockerStore);
+        if (map && $dblockerStore.length > 0) {
+            // Also depend on bridgeStore so markers update when status changes
+            const _ = $bridgeStore;
+            debounceRender($dblockerStore);
+        }
     });
 
     $effect(() => {
@@ -280,14 +285,17 @@
 
             const { id, serial_numb, latitude, longitude, ...visualData } =
                 dblocker;
-            const currentConfigSig = JSON.stringify(visualData);
+            const staTopic = `dbl/${dblocker.serial_numb}/sta`;
+            const staPayload = $bridgeStore[staTopic] ?? null;
+            const isOn = staPayload !== null && staPayload.startsWith('ON');
+            const currentConfigSig = JSON.stringify({ ...visualData, isOn });
             const prevConfigSig = previousConfigMap.get(dblocker.id);
             const hasMarker = overlayMarkers.has(dblocker.id);
 
             if (!hasMarker || currentConfigSig !== prevConfigSig) {
                 if (hasMarker) overlayMarkers.get(dblocker.id)?.remove();
 
-                const el = createRadarElement(dblocker);
+                const el = createRadarElement(dblocker, isOn);
                 // Immediately apply show-sector-labels if this is the expanded marker
                 if ($expandedDblockerId === dblocker.id) {
                     el.classList.add("show-sector-labels");
@@ -309,7 +317,7 @@
         });
     }
 
-    function createRadarElement(dblocker: DBlocker) {
+    function createRadarElement(dblocker: DBlocker, isOn: boolean) {
         // Zero-size container — all children use absolute positioning
         const el = document.createElement("div");
         el.className = "marker-radar";
@@ -317,31 +325,35 @@
         const configs = dblocker.config || [];
         for (let i = 0; i < 6; i++) {
             const angle = i * 60 + baseRotation - 90;
-            for (let layer = 0; layer < 2; layer++) {
-                const sectorConfig = configs[i];
-                if (!sectorConfig) continue;
 
-                if (sectorConfig.signal_ctrl === false && layer === 0) continue;
-                if (sectorConfig.signal_gps === false && layer === 1) continue;
+            // Only render radar slices if dblocker is ON
+            if (isOn) {
+                for (let layer = 0; layer < 2; layer++) {
+                    const sectorConfig = configs[i];
+                    if (!sectorConfig) continue;
 
-                for (let ripple = 0; ripple < 2; ripple++) {
-                    const slice = document.createElement("div");
-                    slice.className = "radar-slice";
+                    if (sectorConfig.signal_ctrl === false && layer === 0) continue;
+                    if (sectorConfig.signal_gps === false && layer === 1) continue;
 
-                    slice.style.setProperty("--angle", `${angle}deg`);
-                    slice.style.setProperty(
-                        "--color",
-                        layer === 1 ? "darkgreen" : "yellow",
-                    );
+                    for (let ripple = 0; ripple < 2; ripple++) {
+                        const slice = document.createElement("div");
+                        slice.className = "radar-slice";
 
-                    const scaleWrapper = layer === 1 ? 0.6 : 1.0;
-                    slice.style.setProperty(
-                        "--scale-factor",
-                        `${scaleWrapper}`,
-                    );
-                    slice.style.animationDelay = `${ripple * -1}s`;
+                        slice.style.setProperty("--angle", `${angle}deg`);
+                        slice.style.setProperty(
+                            "--color",
+                            layer === 1 ? "darkgreen" : "yellow",
+                        );
 
-                    el.appendChild(slice);
+                        const scaleWrapper = layer === 1 ? 0.6 : 1.0;
+                        slice.style.setProperty(
+                            "--scale-factor",
+                            `${scaleWrapper}`,
+                        );
+                        slice.style.animationDelay = `${ripple * -1}s`;
+
+                        el.appendChild(slice);
+                    }
                 }
             }
 
@@ -349,9 +361,8 @@
             const label = document.createElement("div");
             label.className = "sector-label";
             label.textContent = `${i + 1}`;
-            const labelAngle = angle;
             const labelRadius = 40;
-            const rad = (labelAngle * Math.PI) / 180;
+            const rad = (angle * Math.PI) / 180;
             label.style.left = `${Math.cos(rad) * labelRadius}px`;
             label.style.top = `${Math.sin(rad) * labelRadius}px`;
             el.appendChild(label);
