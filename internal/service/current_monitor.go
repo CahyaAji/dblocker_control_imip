@@ -8,11 +8,8 @@ import (
 	"sync"
 )
 
-const failThreshold = 5
-
-// minCurrentDelta is the minimum increase (in amps) the live reading
-// must show over the saved snapshot to be considered valid.
-const minCurrentDelta = 1.0
+const defaultFailThreshold = 5
+const defaultMinCurrentDelta = 1.0
 
 // SectorCurrents holds the three current readings for a single sector.
 type SectorCurrents struct {
@@ -49,14 +46,40 @@ type deviceState struct {
 // CurrentMonitorService compares live /rpt readings against a snapshot
 // taken at config-apply time and tracks consecutive failures centrally.
 type CurrentMonitorService struct {
-	mu      sync.RWMutex
-	devices map[string]*deviceState // keyed by serial_numb
+	mu              sync.RWMutex
+	devices         map[string]*deviceState // keyed by serial_numb
+	failThreshold   int
+	minCurrentDelta float64
 }
 
 func NewCurrentMonitorService() *CurrentMonitorService {
 	return &CurrentMonitorService{
-		devices: make(map[string]*deviceState),
+		devices:         make(map[string]*deviceState),
+		failThreshold:   defaultFailThreshold,
+		minCurrentDelta: defaultMinCurrentDelta,
 	}
+}
+
+// GetSettings returns the current fail threshold and min current delta.
+func (m *CurrentMonitorService) GetSettings() (failThreshold int, minCurrentDelta float64) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.failThreshold, m.minCurrentDelta
+}
+
+// SetSettings updates the fail threshold and min current delta.
+func (m *CurrentMonitorService) SetSettings(failThreshold int, minCurrentDelta float64) error {
+	if failThreshold < 1 {
+		return fmt.Errorf("fail threshold must be at least 1")
+	}
+	if minCurrentDelta <= 0 {
+		return fmt.Errorf("min current delta must be positive")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.failThreshold = failThreshold
+	m.minCurrentDelta = minCurrentDelta
+	return nil
 }
 
 // Snapshot saves the current live readings and the active config for a device.
@@ -104,12 +127,12 @@ func (m *CurrentMonitorService) HandleRpt(serial string, payload string) {
 		cfg := ds.config[s]
 
 		if cfg.Ctrl {
-			if (live.Ctrl1 - saved.Ctrl1) < minCurrentDelta {
+			if (live.Ctrl1 - saved.Ctrl1) < m.minCurrentDelta {
 				ds.failCounts[s].Ctrl1++
 			} else {
 				ds.failCounts[s].Ctrl1 = 0
 			}
-			if (live.Ctrl2 - saved.Ctrl2) < minCurrentDelta {
+			if (live.Ctrl2 - saved.Ctrl2) < m.minCurrentDelta {
 				ds.failCounts[s].Ctrl2++
 			} else {
 				ds.failCounts[s].Ctrl2 = 0
@@ -120,7 +143,7 @@ func (m *CurrentMonitorService) HandleRpt(serial string, payload string) {
 		}
 
 		if cfg.GPS {
-			if (live.GPS - saved.GPS) < minCurrentDelta {
+			if (live.GPS - saved.GPS) < m.minCurrentDelta {
 				ds.failCounts[s].GPS++
 			} else {
 				ds.failCounts[s].GPS = 0
@@ -144,13 +167,13 @@ func (m *CurrentMonitorService) Status(serial string) MonitorStatus {
 	var errors []string
 	for s := 0; s < 6; s++ {
 		fc := ds.failCounts[s]
-		if fc.Ctrl1 >= failThreshold {
+		if fc.Ctrl1 >= m.failThreshold {
 			errors = append(errors, fmt.Sprintf("S%d RC1", s+1))
 		}
-		if fc.Ctrl2 >= failThreshold {
+		if fc.Ctrl2 >= m.failThreshold {
 			errors = append(errors, fmt.Sprintf("S%d RC2", s+1))
 		}
-		if fc.GPS >= failThreshold {
+		if fc.GPS >= m.failThreshold {
 			errors = append(errors, fmt.Sprintf("S%d GPS", s+1))
 		}
 	}
@@ -173,13 +196,13 @@ func (m *CurrentMonitorService) StatusAll() map[string]MonitorStatus {
 		var errors []string
 		for s := 0; s < 6; s++ {
 			fc := ds.failCounts[s]
-			if fc.Ctrl1 >= failThreshold {
+			if fc.Ctrl1 >= m.failThreshold {
 				errors = append(errors, fmt.Sprintf("S%d RC1", s+1))
 			}
-			if fc.Ctrl2 >= failThreshold {
+			if fc.Ctrl2 >= m.failThreshold {
 				errors = append(errors, fmt.Sprintf("S%d RC2", s+1))
 			}
-			if fc.GPS >= failThreshold {
+			if fc.GPS >= m.failThreshold {
 				errors = append(errors, fmt.Sprintf("S%d GPS", s+1))
 			}
 		}
