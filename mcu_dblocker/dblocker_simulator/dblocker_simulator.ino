@@ -135,7 +135,7 @@ void publishData() {
   if (isSystemSleeping || safetyShutdownActive) return;
 
   generateFakeSensors();
-  int tempRaw = 410;
+  int tempRaw = 600;
 
   static char msg[300];
   int offset = 0;
