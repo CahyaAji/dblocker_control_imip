@@ -9,6 +9,8 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -284,9 +286,7 @@ func parseDroneData(label string, data []byte) {
 	// Post drone event to backend
 	go postDroneEvent(label, d)
 
-	// Auto-activate blockers based on drone position
-	// Disabled: automatic blocker activation on detection
-	// TODO: re-enable with per-blocker angle logic to handle irregular placement (ground contour)
+	// Auto-activate blockers based on drone position (disabled)
 	// go autoActivateBlockers(label, d)
 }
 
@@ -350,14 +350,167 @@ func postDroneEvent(label string, d DroneData) {
 	}
 }
 
-// autoActivateBlockers determines which blocker sectors to activate based on
-// the bearing from each blocker to the detected drone. For each blocker, it
-// calculates the angle to the drone and maps it to the correct 60° sector
-// (adjusted by the blocker's angle_start). It then turns on both GPS and Ctrl
-// signals for that sector.
+// detectorBlockerRules maps (detectorName, headingMin, headingMax) to a list of dblocker serial numbers to preset-ON.
+// headingMax is exclusive on the upper bound and the range wraps at 360.
+type blockerRule struct {
+	headingMin     int
+	headingMax     int
+	blockerSerials []string
+}
+
+// ============================================================
+// MAPPING RULES — EDIT THIS SECTION TO CONFIGURE ACTIVATION
+//
+// Syntax:
+//
+//	"<detectorName>": {
+//	    {headingMin: <from°>, headingMax: <to°>, blockerSerials: []string{"<serial>", ...}},
+//	    ...
+//	},
+//
+// - detectorName  : Name of the drone detector (from the database)
+// - headingMin    : start of heading range (inclusive), 0–359
+// - headingMax    : end of heading range (exclusive), 1–360
+// - blockerSerials: one or more dblocker serial numbers to preset-ON when matched
+//
+// Using serial_numb instead of ID makes rules resilient to device re-registration.
+//
+// Example: "Detector 1", heading 0–119°  → activate dblocker with serial "250001"
+//
+//	"Detector 1", heading 120–239° → activate dblocker with serial "250003"
+//	"Detector 2", heading 0–89°   → activate dblockers "250001" AND "250002"
+//
+// ============================================================
+var detectorRules = map[string][]blockerRule{
+	"Detector 1": {
+		{headingMin: 0, headingMax: 120, blockerSerials: []string{"250001"}},
+		{headingMin: 120, headingMax: 240, blockerSerials: []string{"250003"}},
+	},
+	"Detector 2": {
+		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250001", "250002"}},
+	},
+}
+
+// ============================================================
+
+// dblockerSerialCache caches serial_numb → dblocker ID to avoid repeated API calls.
+var (
+	dblockerSerialCache   map[string]uint
+	dblockerSerialCacheMu sync.RWMutex
+)
+
+// resolveBlockerID returns the dblocker ID for a given serial number.
+// It uses a cache and refreshes it on a cache miss.
+func resolveBlockerID(label, serial string) (uint, bool) {
+	dblockerSerialCacheMu.RLock()
+	id, ok := dblockerSerialCache[serial]
+	dblockerSerialCacheMu.RUnlock()
+	if ok {
+		return id, true
+	}
+	// Cache miss — refresh from API
+	if err := refreshBlockerCache(); err != nil {
+		log.Printf("[%s] resolveBlockerID: failed to refresh cache: %v", label, err)
+		return 0, false
+	}
+	dblockerSerialCacheMu.RLock()
+	id, ok = dblockerSerialCache[serial]
+	dblockerSerialCacheMu.RUnlock()
+	if !ok {
+		log.Printf("[%s] resolveBlockerID: serial %q not found in dblocker list", label, serial)
+	}
+	return id, ok
+}
+
+// refreshBlockerCache fetches all dblockers from the API and rebuilds the serial→ID cache.
+func refreshBlockerCache() error {
+	req, err := http.NewRequest("GET", backendURL+"/api/dblockers", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data []struct {
+			ID         uint   `json:"id"`
+			SerialNumb string `json:"serial_numb"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return err
+	}
+
+	newCache := make(map[string]uint, len(result.Data))
+	for _, b := range result.Data {
+		newCache[b.SerialNumb] = b.ID
+	}
+
+	dblockerSerialCacheMu.Lock()
+	dblockerSerialCache = newCache
+	dblockerSerialCacheMu.Unlock()
+	return nil
+}
+
+// autoActivateBlockers applies the detector→heading→dblocker mapping rules
+// and fires preset-ON for each matched dblocker.
 func autoActivateBlockers(label string, d DroneData) {
-	// TODO: implement per-blocker angle-based activation logic
-	// to handle irregular blocker placement due to ground contour
+	// Parse detector name from label format "detector-{id}-{name}"
+	parts := strings.SplitN(label, "-", 3)
+	if len(parts) < 3 {
+		log.Printf("[%s] autoActivateBlockers: cannot parse detector name from label", label)
+		return
+	}
+	detectorName := parts[2]
+
+	rules, ok := detectorRules[detectorName]
+	if !ok {
+		return // no rules configured for this detector
+	}
+
+	heading := int(d.DirectionAngle)
+
+	for _, rule := range rules {
+		if heading >= rule.headingMin && heading < rule.headingMax {
+			for _, serial := range rule.blockerSerials {
+				log.Printf("[%s] heading %d° matches rule [%d-%d°) → activating dblocker serial %q preset",
+					label, heading, rule.headingMin, rule.headingMax, serial)
+				go applyBlockerPreset(label, serial)
+			}
+		}
+	}
+}
+
+// applyBlockerPreset resolves a dblocker serial number to its ID and calls the preset-ON endpoint.
+func applyBlockerPreset(label, serial string) {
+	blockerID, ok := resolveBlockerID(label, serial)
+	if !ok {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/dblockers/config/preset/%d", backendURL, blockerID)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		log.Printf("[%s] applyBlockerPreset: failed to create request for dblocker %q: %v", label, serial, err)
+		return
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[%s] applyBlockerPreset: request failed for dblocker %q: %v", label, serial, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[%s] applyBlockerPreset: dblocker %q returned status %d", label, serial, resp.StatusCode)
+	}
 }
 
 // calcBearing returns the bearing in degrees (0-360) from point A to point B.

@@ -17,8 +17,9 @@ type DBlockerConfig struct {
 }
 
 type DBlocker struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+	ID         uint   `json:"id"`
+	Name       string `json:"name"`
+	SerialNumb string `json:"serial_numb"`
 }
 
 type Schedule struct {
