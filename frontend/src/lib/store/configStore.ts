@@ -42,3 +42,11 @@ settings.subscribe((value) => {
         localStorage.setItem('app-settings', JSON.stringify(value));
     }
 });
+
+// Temperature limits store (fetched from backend, shared across components)
+export interface TempLimits {
+    warnLimit: number;
+    offLimit: number;
+}
+
+export const tempLimitsStore = writable<TempLimits>({ warnLimit: 55, offLimit: 65 });

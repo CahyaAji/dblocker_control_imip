@@ -2,6 +2,7 @@
     import DblockersCard from "./DblockersCard.svelte";
     import DBlockersList from "./DBlockersList.svelte";
     import FanSettingsCard from "./FanSettingsCard.svelte";
+    import TempLimitSettingsCard from "./TempLimitSettingsCard.svelte";
     import ScheduleManager from "./ScheduleManager.svelte";
 
     let activeTab = $state("dblocker");
@@ -27,6 +28,7 @@
     {#if activeTab === "settings"}
         <div class="settings-content">
             <FanSettingsCard />
+            <TempLimitSettingsCard />
         </div>
     {:else if activeTab === "dblocker"}
         <DblockersCard />

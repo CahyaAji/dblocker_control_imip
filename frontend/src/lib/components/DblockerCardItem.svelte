@@ -6,6 +6,7 @@
     import { updateDBlockerConfig, turnOffAll, presetOn, sleepDBlocker, rebootDBlocker, wakeDBlocker, expandedDblockerId } from "../store/dblockerStore";
     import { bridgeStore, subscribeBridge, unsubscribeBridge } from "../store/bridgeStore";
     import { API_BASE } from "../utils/api";
+    import { tempLimitsStore } from "../store/configStore";
 
     const calculateCurrentA = (rawADC: number): number => {
         const VCC = 3.3;
@@ -76,6 +77,8 @@
     $: liveTemperatureC = parsedRpt?.temperatureC ?? null;
     $: slaveConnected = parsedRpt?.slaveConnected ?? null;
     $: isOnline = staPayload?.startsWith('ON') ?? false;
+    $: isHighTemp = liveTemperatureC !== null && liveTemperatureC > $tempLimitsStore.warnLimit;
+    $: isOverheating = liveTemperatureC !== null && liveTemperatureC > $tempLimitsStore.offLimit;
 
     // --- Monitor status from backend ---
     let monitorErrors: string[] = [];
@@ -98,6 +101,7 @@
 
     $: warningTitle = warningState === "error"
         ? `Error: ${monitorErrors.join(', ')} current lower than expected`
+        : isHighTemp ? `High temperature: ${liveTemperatureC?.toFixed(1)}°C`
         : !isOnline ? "Device is not online"
         : slaveConnected === false ? "Slave not connected"
         : "Normal";
@@ -224,7 +228,7 @@
             <div
                 class="warning-indicator"
                 class:is-error={warningState === "error"}
-                class:is-warn={warningState !== "error" && (!isOnline || slaveConnected === false)}
+                class:is-warn={warningState !== "error" && (isHighTemp || !isOnline || slaveConnected === false)}
                 title={warningTitle}
                 aria-label={warningTitle}
             >
@@ -232,7 +236,7 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 3L2.6 19.2A1.2 1.2 0 003.64 21h16.72a1.2 1.2 0 001.04-1.8L12 3zm1 13h-2v-2h2v2zm0-4h-2V8h2v4z" />
                     </svg>
-                {:else if !isOnline || slaveConnected === false}
+                {:else if isHighTemp || !isOnline || slaveConnected === false}
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 3L2.6 19.2A1.2 1.2 0 003.64 21h16.72a1.2 1.2 0 001.04-1.8L12 3zm1 13h-2v-2h2v2zm0-4h-2V8h2v4z" />
                     </svg>
@@ -250,12 +254,17 @@
     {#if isExpanded && isOnline && slaveConnected === false}
         <div class="disabled-notice warn">Slave not connected</div>
     {/if}
+    {#if isExpanded && isOverheating}
+        <div class="disabled-notice warn">Temperature too high ({liveTemperatureC?.toFixed(1)}°C) — sectors blocked</div>
+    {:else if isExpanded && isHighTemp}
+        <div class="disabled-notice warn">High temperature: {liveTemperatureC?.toFixed(1)}°C</div>
+    {/if}
     <DblockerSectorGrid
         {isExpanded}
         {showAdvancedActions}
         {liveConfig}
         {editableConfig}
-        disabled={!isOnline}
+        disabled={!isOnline || isOverheating}
         slaveDisconnected={slaveConnected === false}
         onToggleSignal={toggleEditableSignal}
         onAdvancedAction={handleAdvancedAction}
@@ -265,8 +274,8 @@
         {isExpanded}
         {canReadLastState}
         {showAdvancedActions}
-        disabled={!isOnline}
-        presetDisabled={!isOnline || slaveConnected === false}
+        disabled={!isOnline || isOverheating}
+        presetDisabled={!isOnline || slaveConnected === false || isOverheating}
         hasPreset={Array.isArray(dblocker.preset_config) && dblocker.preset_config.length === 6}
         onReadLastState={reloadFromLatest}
         onApply={applyConfig}

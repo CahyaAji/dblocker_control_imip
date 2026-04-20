@@ -5,8 +5,10 @@ import (
 	"dblocker_control/internal/infrastructure/database"
 	"dblocker_control/internal/infrastructure/database/repository"
 	"dblocker_control/internal/infrastructure/mqtt"
+	"dblocker_control/internal/models"
 	"dblocker_control/internal/route"
 	"dblocker_control/internal/service"
+	"fmt"
 	"log"
 	"os"
 
@@ -38,6 +40,39 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize bridge service: %v", err)
 	}
+
+	// Wire auto-off callback: turn off all sectors when temperature exceeds limit
+	fanControlSvc.SetAutoOffCallback(func(serial string) {
+		dblockers, err := dblockerRepo.FindAll()
+		if err != nil {
+			log.Printf("auto-off: failed to find dblockers: %v", err)
+			return
+		}
+		for _, d := range dblockers {
+			if d.SerialNumb == serial {
+				allOff := make([]models.DBlockerConfig, 6)
+				if err := dblockerRepo.UpdateConfig(d.ID, allOff); err != nil {
+					log.Printf("auto-off: failed to update config for %s: %v", serial, err)
+					return
+				}
+				fanM, fanS := fanControlSvc.FanState(serial, allOff)
+				bitmask, err := service.DBlockerConfigToBitmask(allOff, fanM, fanS)
+				if err != nil {
+					log.Printf("auto-off: failed to build bitmask for %s: %v", serial, err)
+					return
+				}
+				topic := fmt.Sprintf("dbl/%s/cmd", serial)
+				payload := []byte{byte(bitmask >> 8), byte(bitmask)}
+				if err := mqttClient.Publish(topic, 1, true, payload); err != nil {
+					log.Printf("auto-off: failed to publish for %s: %v", serial, err)
+				} else {
+					log.Printf("auto-off: turned off %s (%s) due to high temperature", d.Name, serial)
+				}
+				return
+			}
+		}
+		log.Printf("auto-off: device with serial %s not found", serial)
+	})
 
 	bridgeHandler := handlerhttp.NewBridgeHandler(bridgeSvc)
 

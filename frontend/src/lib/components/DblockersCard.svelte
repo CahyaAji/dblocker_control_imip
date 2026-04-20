@@ -6,11 +6,21 @@
         fetchDBlockers,
         type DBlocker,
     } from "../store/dblockerStore";
+    import { tempLimitsStore } from "../store/configStore";
+    import { authFetch } from "../store/authStore";
+    import { API_BASE } from "../utils/api";
 
     let dblockers: DBlocker[] = [];
 
     onMount(async () => {
         await fetchDBlockers();
+        try {
+            const res = await authFetch(`${API_BASE}/api/dblockers/temp-limits`);
+            if (res.ok) {
+                const json = await res.json();
+                tempLimitsStore.set({ warnLimit: json.data.temp_warn_limit, offLimit: json.data.temp_off_limit });
+            }
+        } catch { /* ignore */ }
     });
 
     $: dblockers = [...$dblockerStore].sort((a, b) => a.id - b.id);

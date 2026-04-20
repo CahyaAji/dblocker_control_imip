@@ -14,6 +14,10 @@ const (
 	defaultFanOnTemp  = 45.0 // turn fans ON above this temperature (°C)
 	defaultFanOffTemp = 35.0 // turn fans OFF below this temperature (°C)
 	minTempGap        = 5.0  // minimum difference between ON and OFF thresholds
+
+	defaultTempWarnLimit = 55.0 // show warning above this temperature (°C)
+	defaultTempOffLimit  = 65.0 // auto turn-off above this temperature (°C)
+	minTempLimitGap      = 5.0  // minimum difference between warn and off limits
 )
 
 type fanDeviceState struct {
@@ -21,7 +25,12 @@ type fanDeviceState struct {
 	temperature float64
 	hasTemp     bool
 	anySectorOn bool
+	autoOffSent bool // prevents repeated auto-off commands
 }
+
+// AutoOffCallback is called when temperature exceeds the off limit.
+// serial is the device serial number.
+type AutoOffCallback func(serial string)
 
 // FanControlService manages automatic fan control per device.
 // Rules:
@@ -30,20 +39,32 @@ type fanDeviceState struct {
 //  3. If no sector is ON and temperature < fanOffTemp → fans OFF.
 //  4. Between fanOffTemp–fanOnTemp with no sector ON → keep previous state (hysteresis).
 type FanControlService struct {
-	mu         sync.RWMutex
-	devices    map[string]*fanDeviceState
-	client     mqtt.Client
-	fanOnTemp  float64
-	fanOffTemp float64
+	mu            sync.RWMutex
+	devices       map[string]*fanDeviceState
+	client        mqtt.Client
+	fanOnTemp     float64
+	fanOffTemp    float64
+	tempWarnLimit float64
+	tempOffLimit  float64
+	autoOffCb     AutoOffCallback
 }
 
 func NewFanControlService(client mqtt.Client) *FanControlService {
 	return &FanControlService{
-		devices:    make(map[string]*fanDeviceState),
-		client:     client,
-		fanOnTemp:  defaultFanOnTemp,
-		fanOffTemp: defaultFanOffTemp,
+		devices:       make(map[string]*fanDeviceState),
+		client:        client,
+		fanOnTemp:     defaultFanOnTemp,
+		fanOffTemp:    defaultFanOffTemp,
+		tempWarnLimit: defaultTempWarnLimit,
+		tempOffLimit:  defaultTempOffLimit,
 	}
+}
+
+// SetAutoOffCallback sets the callback invoked when a device exceeds the off temperature limit.
+func (f *FanControlService) SetAutoOffCallback(cb AutoOffCallback) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.autoOffCb = cb
 }
 
 // InitDevice sets the initial sector-on state for a device (called on startup).
@@ -53,6 +74,7 @@ func (f *FanControlService) InitDevice(serial string, cfg []models.DBlockerConfi
 
 	ds := f.getOrCreate(serial)
 	ds.anySectorOn = anySectorOn(cfg)
+	ds.autoOffSent = false
 }
 
 // FanState computes the fan state for a device given the new config.
@@ -102,9 +124,10 @@ func (f *FanControlService) HandleTemperature(serial string, payload string) {
 	ds.temperature = temp
 	ds.hasTemp = true
 
-	// If sectors are ON, fans are already ON — nothing to do.
+	// If sectors are ON, fans are already ON — skip fan threshold logic but still check temp limits.
 	if ds.anySectorOn {
 		f.mu.Unlock()
+		f.checkTempLimits(serial, temp)
 		return
 	}
 
@@ -121,6 +144,9 @@ func (f *FanControlService) HandleTemperature(serial string, payload string) {
 	if newFansOn != prevFansOn {
 		f.sendFanOnlyCommand(serial, newFansOn)
 	}
+
+	// Check temperature limits for warning/auto-off
+	f.checkTempLimits(serial, temp)
 }
 
 // TemperatureAll returns the latest temperature for every tracked device.
@@ -156,6 +182,68 @@ func (f *FanControlService) SetThresholds(onTemp, offTemp float64) error {
 	f.mu.Unlock()
 	log.Printf("fan_control: thresholds updated: ON > %.1f°C, OFF < %.1f°C", onTemp, offTemp)
 	return nil
+}
+
+// GetTempLimits returns the current warning and auto-off temperature limits.
+func (f *FanControlService) GetTempLimits() (warnLimit, offLimit float64) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.tempWarnLimit, f.tempOffLimit
+}
+
+// SetTempLimits updates the warning and auto-off temperature limits.
+func (f *FanControlService) SetTempLimits(warnLimit, offLimit float64) error {
+	if offLimit-warnLimit < minTempLimitGap {
+		return fmt.Errorf("auto-off temperature must be at least %.0f°C higher than warning temperature", minTempLimitGap)
+	}
+	if warnLimit < 0 || offLimit < 0 {
+		return fmt.Errorf("temperature limits must be positive")
+	}
+	f.mu.Lock()
+	f.tempWarnLimit = warnLimit
+	f.tempOffLimit = offLimit
+	// Reset auto-off flags so devices can be re-evaluated
+	for _, ds := range f.devices {
+		ds.autoOffSent = false
+	}
+	f.mu.Unlock()
+	log.Printf("fan_control: temp limits updated: warn > %.1f°C, auto-off > %.1f°C", warnLimit, offLimit)
+	return nil
+}
+
+// checkTempLimits triggers auto-off when temperature exceeds the off limit.
+func (f *FanControlService) checkTempLimits(serial string, temp float64) {
+	f.mu.Lock()
+	ds := f.getOrCreate(serial)
+	offLimit := f.tempOffLimit
+	cb := f.autoOffCb
+
+	if temp > offLimit && !ds.autoOffSent {
+		ds.autoOffSent = true
+		f.mu.Unlock()
+		log.Printf("fan_control: temp %.1f°C > %.1f°C for %s, triggering auto-off", temp, offLimit, serial)
+		if cb != nil {
+			cb(serial)
+		}
+		return
+	}
+
+	// Reset auto-off flag when temperature drops below warning limit
+	if temp < f.tempWarnLimit && ds.autoOffSent {
+		ds.autoOffSent = false
+	}
+	f.mu.Unlock()
+}
+
+// IsOverheating returns true if the device temperature exceeds the auto-off limit.
+func (f *FanControlService) IsOverheating(serial string) bool {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	ds, ok := f.devices[serial]
+	if !ok || !ds.hasTemp {
+		return false
+	}
+	return ds.temperature > f.tempOffLimit
 }
 
 // sendFanOnlyCommand publishes a config with all sectors OFF and only fan bits set.

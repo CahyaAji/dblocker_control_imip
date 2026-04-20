@@ -207,6 +207,16 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 		return
 	}
 
+	// Block turning on sectors if device is overheating
+	if h.Bridge != nil && h.Bridge.FanControl() != nil && h.Bridge.FanControl().IsOverheating(dblocker.SerialNumb) {
+		for _, cfg := range input.Config {
+			if cfg.SignalGPS || cfg.SignalCtrl {
+				c.JSON(http.StatusForbidden, gin.H{"error": "device temperature exceeds safe limit, cannot turn on sectors"})
+				return
+			}
+		}
+	}
+
 	if err := h.Repo.UpdateConfig(input.ID, input.Config[:]); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -398,6 +408,41 @@ func (h *DBlockerHandler) UpdateFanThresholds(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{"fan_on_temp": input.FanOnTemp, "fan_off_temp": input.FanOffTemp}})
 }
 
+// GetTempLimits returns the current warning and auto-off temperature limits.
+func (h *DBlockerHandler) GetTempLimits(c *gin.Context) {
+	if h.Bridge == nil || h.Bridge.FanControl() == nil {
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"temp_warn_limit": 55.0, "temp_off_limit": 65.0}})
+		return
+	}
+
+	warnLimit, offLimit := h.Bridge.FanControl().GetTempLimits()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"temp_warn_limit": warnLimit, "temp_off_limit": offLimit}})
+}
+
+// UpdateTempLimits updates the warning and auto-off temperature limits.
+func (h *DBlockerHandler) UpdateTempLimits(c *gin.Context) {
+	var input struct {
+		TempWarnLimit float64 `json:"temp_warn_limit" binding:"required"`
+		TempOffLimit  float64 `json:"temp_off_limit" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.Bridge == nil || h.Bridge.FanControl() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "fan control not available"})
+		return
+	}
+
+	if err := h.Bridge.FanControl().SetTempLimits(input.TempWarnLimit, input.TempOffLimit); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"temp_warn_limit": input.TempWarnLimit, "temp_off_limit": input.TempOffLimit}})
+}
+
 func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 	idParam := c.Param("id")
 
@@ -410,6 +455,12 @@ func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 	dblocker, err := h.Repo.FindByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	// Block preset ON if device is overheating
+	if h.Bridge != nil && h.Bridge.FanControl() != nil && h.Bridge.FanControl().IsOverheating(dblocker.SerialNumb) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "device temperature exceeds safe limit, cannot turn on sectors"})
 		return
 	}
 
