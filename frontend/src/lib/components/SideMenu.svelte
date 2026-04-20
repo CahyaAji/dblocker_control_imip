@@ -1,6 +1,7 @@
 <script>
     import DblockersCard from "./DblockersCard.svelte";
     import DBlockersList from "./DBlockersList.svelte";
+    import FanSettingsCard from "./FanSettingsCard.svelte";
     import ScheduleManager from "./ScheduleManager.svelte";
 
     let activeTab = $state("dblocker");
@@ -24,8 +25,8 @@
     </div>
 
     {#if activeTab === "settings"}
-        <div class="other" style="background-color: lightblue;">
-            Content for Tab 1
+        <div class="settings-content">
+            <FanSettingsCard />
         </div>
     {:else if activeTab === "dblocker"}
         <DblockersCard />
@@ -43,23 +44,14 @@
         gap: 0px;
     }
 
-    .other {
+    .settings-content {
         display: flex;
-        min-height: 200px;
-        width: 100%;
-        background: linear-gradient(
-            160deg,
-            color-mix(in srgb, var(--card-bg) 90%, var(--accent-cyan) 10%) 0%,
-            color-mix(in srgb, var(--card-bg) 92%, var(--accent-blue) 8%) 100%
-        );
-        margin-bottom: 4px;
-        justify-items: center;
-        align-items: center;
-        border: 1px solid color-mix(in srgb, var(--separator) 72%, transparent);
-        border-radius: 14px;
-        justify-content: center;
-        color: var(--text-secondary);
-        font-weight: 600;
+        flex-direction: column;
+        gap: 8px;
+        padding: 10px 6px;
+        flex: 1;
+        overflow-y: auto;
+        min-height: 0;
     }
 
     .tabs {
