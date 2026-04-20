@@ -3,7 +3,7 @@
     import DblockerCardActions from "./DblockerCardActions.svelte";
     import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
     import type { DBlocker, DBlockerConfig, SectorCurrents } from "../store/dblockerStore";
-    import { updateDBlockerConfig, turnOffAll, presetOn, expandedDblockerId } from "../store/dblockerStore";
+    import { updateDBlockerConfig, turnOffAll, presetOn, sleepDBlocker, rebootDBlocker, wakeDBlocker, expandedDblockerId } from "../store/dblockerStore";
     import { bridgeStore, subscribeBridge, unsubscribeBridge } from "../store/bridgeStore";
     import { API_BASE } from "../utils/api";
 
@@ -69,11 +69,7 @@
     $: rptTopic = `dbl/${dblocker.serial_numb}/rpt`;
     $: rptPayload = $bridgeStore[rptTopic] ?? null;
     $: parsedRpt = rptPayload ? parseRpt(rptPayload) : null;
-    $: liveSectorCurrents = parsedRpt?.sectors ?? null;
     $: liveTemperatureC = parsedRpt?.temperatureC ?? null;
-
-    // Snapshot taken right before Apply
-    let savedSectorCurrents: SectorCurrents[] | null = null;
 
     // --- Monitor status from backend ---
     let monitorErrors: string[] = [];
@@ -154,11 +150,6 @@
 
     async function applyConfig() {
         try {
-            // Snapshot live currents for debug display
-            savedSectorCurrents = liveSectorCurrents
-                ? liveSectorCurrents.map((c) => ({ ctrl1: c.ctrl1, ctrl2: c.ctrl2, gps: c.gps }))
-                : null;
-
             waitingForBackend = true;
             await updateDBlockerConfig(dblocker.id, editableConfig);
             // Backend snapshots currents at config-apply; start polling for monitor errors
@@ -183,11 +174,14 @@
         }
     }
 
-    function handleAdvancedAction(action: "sleep" | "reboot") {
-        console.log("[DBlockerCard] advanced action", {
-            id: dblocker.id,
-            action,
-        });
+    async function handleAdvancedAction(action: "sleep" | "reboot" | "wake") {
+        if (action === "sleep") {
+            await sleepDBlocker(dblocker.id);
+        } else if (action === "reboot") {
+            await rebootDBlocker(dblocker.id);
+        } else if (action === "wake") {
+            await wakeDBlocker(dblocker.id);
+        }
     }
 
     async function handleOffAll() {
@@ -242,8 +236,6 @@
         {showAdvancedActions}
         {liveConfig}
         {editableConfig}
-        {liveSectorCurrents}
-        {savedSectorCurrents}
         onToggleSignal={toggleEditableSignal}
         onAdvancedAction={handleAdvancedAction}
     />
