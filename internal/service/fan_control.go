@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	fanOnTemp  = 45.0 // turn fans ON above this temperature (°C)
-	fanOffTemp = 35.0 // turn fans OFF below this temperature (°C)
+	defaultFanOnTemp  = 45.0 // turn fans ON above this temperature (°C)
+	defaultFanOffTemp = 35.0 // turn fans OFF below this temperature (°C)
+	minTempGap        = 5.0  // minimum difference between ON and OFF thresholds
 )
 
 type fanDeviceState struct {
@@ -25,19 +26,23 @@ type fanDeviceState struct {
 // FanControlService manages automatic fan control per device.
 // Rules:
 //  1. If any sector is ON → both fans ON.
-//  2. If no sector is ON and temperature > 45°C → fans ON.
-//  3. If no sector is ON and temperature < 35°C → fans OFF.
-//  4. Between 35–45°C with no sector ON → keep previous state (hysteresis).
+//  2. If no sector is ON and temperature > fanOnTemp → fans ON.
+//  3. If no sector is ON and temperature < fanOffTemp → fans OFF.
+//  4. Between fanOffTemp–fanOnTemp with no sector ON → keep previous state (hysteresis).
 type FanControlService struct {
-	mu      sync.RWMutex
-	devices map[string]*fanDeviceState
-	client  mqtt.Client
+	mu         sync.RWMutex
+	devices    map[string]*fanDeviceState
+	client     mqtt.Client
+	fanOnTemp  float64
+	fanOffTemp float64
 }
 
 func NewFanControlService(client mqtt.Client) *FanControlService {
 	return &FanControlService{
-		devices: make(map[string]*fanDeviceState),
-		client:  client,
+		devices:    make(map[string]*fanDeviceState),
+		client:     client,
+		fanOnTemp:  defaultFanOnTemp,
+		fanOffTemp: defaultFanOffTemp,
 	}
 }
 
@@ -68,12 +73,12 @@ func (f *FanControlService) FanState(serial string, cfg []models.DBlockerConfig)
 
 	// No sector ON — check temperature
 	if ds.hasTemp {
-		if ds.temperature > fanOnTemp {
+		if ds.temperature > f.fanOnTemp {
 			ds.fansOn = true
-		} else if ds.temperature < fanOffTemp {
+		} else if ds.temperature < f.fanOffTemp {
 			ds.fansOn = false
 		}
-		// between 35–45: keep current state (hysteresis)
+		// between thresholds: keep current state (hysteresis)
 	} else {
 		ds.fansOn = false
 	}
@@ -104,9 +109,9 @@ func (f *FanControlService) HandleTemperature(serial string, payload string) {
 	}
 
 	prevFansOn := ds.fansOn
-	if temp > fanOnTemp {
+	if temp > f.fanOnTemp {
 		ds.fansOn = true
-	} else if temp < fanOffTemp {
+	} else if temp < f.fanOffTemp {
 		ds.fansOn = false
 	}
 
@@ -132,6 +137,27 @@ func (f *FanControlService) TemperatureAll() map[string]float64 {
 	return result
 }
 
+// GetThresholds returns the current fan ON/OFF temperature thresholds.
+func (f *FanControlService) GetThresholds() (onTemp, offTemp float64) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.fanOnTemp, f.fanOffTemp
+}
+
+// SetThresholds updates the fan ON/OFF temperature thresholds.
+// Returns an error if onTemp - offTemp < minTempGap.
+func (f *FanControlService) SetThresholds(onTemp, offTemp float64) error {
+	if onTemp-offTemp < minTempGap {
+		return fmt.Errorf("fan_on_temp must be at least %.0f°C higher than fan_off_temp", minTempGap)
+	}
+	f.mu.Lock()
+	f.fanOnTemp = onTemp
+	f.fanOffTemp = offTemp
+	f.mu.Unlock()
+	log.Printf("fan_control: thresholds updated: ON > %.1f°C, OFF < %.1f°C", onTemp, offTemp)
+	return nil
+}
+
 // sendFanOnlyCommand publishes a config with all sectors OFF and only fan bits set.
 func (f *FanControlService) sendFanOnlyCommand(serial string, fansOn bool) {
 	allOff := make([]models.DBlockerConfig, 6)
@@ -147,9 +173,9 @@ func (f *FanControlService) sendFanOnlyCommand(serial string, fansOn bool) {
 	if err := f.client.Publish(topic, 1, true, payload); err != nil {
 		log.Printf("fan_control: failed to publish fan command for %s: %v", serial, err)
 	} else if fansOn {
-		log.Printf("fan_control: temp > %.0f°C for %s, fans ON", fanOnTemp, serial)
+		log.Printf("fan_control: temp > %.0f°C for %s, fans ON", f.fanOnTemp, serial)
 	} else {
-		log.Printf("fan_control: temp < %.0f°C for %s, fans OFF", fanOffTemp, serial)
+		log.Printf("fan_control: temp < %.0f°C for %s, fans OFF", f.fanOffTemp, serial)
 	}
 }
 

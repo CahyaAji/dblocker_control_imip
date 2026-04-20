@@ -60,6 +60,8 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.POST("/dblockers/wake/:id", dblockerHandler.WakeDBlocker)
 	api.PUT("/dblockers/preset", dblockerHandler.UpdatePresetConfig)
 	api.GET("/dblockers/monitor", dblockerHandler.GetMonitorStatus)
+	api.GET("/dblockers/fan-thresholds", dblockerHandler.GetFanThresholds)
+	api.PUT("/dblockers/fan-thresholds", dblockerHandler.UpdateFanThresholds)
 	api.DELETE("/dblockers/:id", dblockerHandler.DeleteDBlocker)
 
 	// Schedules

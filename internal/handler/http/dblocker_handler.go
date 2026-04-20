@@ -363,6 +363,41 @@ func (h *DBlockerHandler) GetMonitorStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": h.Bridge.Monitor().StatusAll()})
 }
 
+// GetFanThresholds returns the current fan ON/OFF temperature thresholds.
+func (h *DBlockerHandler) GetFanThresholds(c *gin.Context) {
+	if h.Bridge == nil || h.Bridge.FanControl() == nil {
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"fan_on_temp": 45.0, "fan_off_temp": 35.0}})
+		return
+	}
+
+	onTemp, offTemp := h.Bridge.FanControl().GetThresholds()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"fan_on_temp": onTemp, "fan_off_temp": offTemp}})
+}
+
+// UpdateFanThresholds updates the fan ON/OFF temperature thresholds.
+func (h *DBlockerHandler) UpdateFanThresholds(c *gin.Context) {
+	var input struct {
+		FanOnTemp  float64 `json:"fan_on_temp" binding:"required"`
+		FanOffTemp float64 `json:"fan_off_temp" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.Bridge == nil || h.Bridge.FanControl() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "fan control not available"})
+		return
+	}
+
+	if err := h.Bridge.FanControl().SetThresholds(input.FanOnTemp, input.FanOffTemp); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"fan_on_temp": input.FanOnTemp, "fan_off_temp": input.FanOffTemp}})
+}
+
 func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 	idParam := c.Param("id")
 
