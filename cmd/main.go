@@ -32,8 +32,9 @@ func main() {
 	dblockerRepo := repository.NewDBlockerRepository(db)
 
 	monitorSvc := service.NewCurrentMonitorService()
+	fanControlSvc := service.NewFanControlService(mqttClient)
 
-	bridgeSvc, err := service.NewBridgeService(mqttClient, dblockerRepo, monitorSvc)
+	bridgeSvc, err := service.NewBridgeService(mqttClient, dblockerRepo, monitorSvc, fanControlSvc)
 	if err != nil {
 		log.Fatalf("Failed to initialize bridge service: %v", err)
 	}

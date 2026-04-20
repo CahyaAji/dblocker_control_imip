@@ -24,6 +24,20 @@ func NewDBlockerHandler(repo *repository.DBlockerRepository, logRepo *repository
 	return &DBlockerHandler{Repo: repo, LogRepo: logRepo, MqttClient: mqttClient, Bridge: bridge}
 }
 
+// fanState returns the automatic fan state for a device given its config.
+func (h *DBlockerHandler) fanState(serial string, cfg []models.DBlockerConfig) (bool, bool) {
+	if h.Bridge != nil && h.Bridge.FanControl() != nil {
+		return h.Bridge.FanControl().FanState(serial, cfg)
+	}
+	// Fallback: fans follow sectors
+	for _, c := range cfg {
+		if c.SignalGPS || c.SignalCtrl {
+			return true, true
+		}
+	}
+	return false, false
+}
+
 func (h *DBlockerHandler) CreateDBlocker(c *gin.Context) {
 	var input models.DBlocker
 	if err := c.ShouldBindJSON(&input); err != nil {
@@ -215,10 +229,11 @@ func (h *DBlockerHandler) UpdateDBlockerConfig(c *gin.Context) {
 		}
 	}
 
+	fanM, fanS := h.fanState(dblocker.SerialNumb, input.Config[:])
 	bitmaskPayload, err := service.DBlockerConfigToBitmask(
 		input.Config[:],
-		true,
-		true,
+		fanM,
+		fanS,
 	)
 
 	if err != nil {
@@ -289,10 +304,11 @@ func (h *DBlockerHandler) TurnOffAllDBlockerConfig(c *gin.Context) {
 
 	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
 
+	fanM, fanS := h.fanState(dblocker.SerialNumb, allOffConfig[:])
 	bitmaskPayload, err := service.DBlockerConfigToBitmask(
 		allOffConfig[:],
-		false,
-		false,
+		fanM,
+		fanS,
 	)
 
 	if err != nil {
@@ -374,10 +390,11 @@ func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 
 	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
 
+	fanM, fanS := h.fanState(dblocker.SerialNumb, dblocker.PresetConfig)
 	bitmaskPayload, err := service.DBlockerConfigToBitmask(
 		dblocker.PresetConfig,
-		true,
-		true,
+		fanM,
+		fanS,
 	)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -451,7 +468,8 @@ func (h *DBlockerHandler) SleepDBlocker(c *gin.Context) {
 
 	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
 
-	bitmaskPayload, err := service.DBlockerConfigToBitmask(allOffConfig[:], false, false)
+	fanM, fanS := h.fanState(dblocker.SerialNumb, allOffConfig[:])
+	bitmaskPayload, err := service.DBlockerConfigToBitmask(allOffConfig[:], fanM, fanS)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

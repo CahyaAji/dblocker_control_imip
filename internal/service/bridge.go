@@ -27,6 +27,7 @@ type BridgeService struct {
 	lastRptBySerial map[string]string       // latest /rpt payload per serial
 	broadcaster     *broadcaster
 	monitor         *CurrentMonitorService
+	fanControl      *FanControlService
 }
 
 // Subscriber holds separate channels for /sta (priority) and /rpt (best-effort).
@@ -50,7 +51,7 @@ type DBlockerReader interface {
 
 // NewBridgeService wires the MQTT subscription to the broadcaster.
 
-func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *CurrentMonitorService) (*BridgeService, error) {
+func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *CurrentMonitorService, fanControl *FanControlService) (*BridgeService, error) {
 	br := &BridgeService{
 		client:          client,
 		reader:          reader,
@@ -59,6 +60,7 @@ func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *Curren
 		lastRptBySerial: make(map[string]string),
 		broadcaster:     newBroadcaster(),
 		monitor:         monitor,
+		fanControl:      fanControl,
 	}
 
 	if registrar, ok := client.(mqtt.OnConnectRegistrar); ok {
@@ -107,6 +109,11 @@ func (b *BridgeService) RefreshTopics() error {
 		serial := strings.TrimSpace(dblocker.SerialNumb)
 		if serial == "" {
 			continue
+		}
+
+		// Initialize fan control state from DB config
+		if b.fanControl != nil {
+			b.fanControl.InitDevice(serial, dblocker.Config)
 		}
 
 		deviceTopics := []string{
@@ -227,6 +234,11 @@ func (b *BridgeService) Monitor() *CurrentMonitorService {
 	return b.monitor
 }
 
+// FanControl returns the fan control service.
+func (b *BridgeService) FanControl() *FanControlService {
+	return b.fanControl
+}
+
 // LastRpt returns the latest /rpt payload for a serial, or empty string if none.
 func (b *BridgeService) LastRpt(serial string) string {
 	b.mu.RLock()
@@ -284,6 +296,9 @@ func (b *BridgeService) broadcast(msg mqtt.Message) {
 			b.lastRptBySerial[serial] = string(msg.Payload)
 			b.mu.Unlock()
 			b.monitor.HandleRpt(serial, string(msg.Payload))
+			if b.fanControl != nil {
+				b.fanControl.HandleTemperature(serial, string(msg.Payload))
+			}
 		}
 	}
 
