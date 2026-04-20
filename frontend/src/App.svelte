@@ -15,7 +15,7 @@
 
   let isResizing = $state(false);
   let activeMsgTab = $state<"receiver" | "status">("receiver");
-  let showMsgPanel = $state(true);
+  let showMsgPanel = $state(false);
   let showUserMgmt = $state(false);
 
   const MSG_PANEL_SHORTCUT_LABEL = "Ctrl/Cmd+Alt+Shift+M";
