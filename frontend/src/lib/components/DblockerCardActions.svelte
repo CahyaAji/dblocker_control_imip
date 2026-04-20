@@ -5,6 +5,8 @@
     export let canReadLastState = false;
     export let showAdvancedActions = false;
     export let hasPreset = false;
+    export let disabled = false;
+    export let presetDisabled = false;
     export let onReadLastState: () => void;
     export let onApply: () => void;
     export let onPresetOn: () => void;
@@ -24,13 +26,13 @@
             >
                 Read Last State
             </button>
-            <button class="apply-btn" type="button" on:click={onApply}>
+            <button class="apply-btn" type="button" disabled={disabled} on:click={onApply}>
                 Apply
             </button>
             <button
                 class="detail-btn"
                 type="button"
-                disabled={!hasPreset}
+                disabled={presetDisabled || !hasPreset}
                 on:click={onPresetOn}
             >
                 Preset ON
