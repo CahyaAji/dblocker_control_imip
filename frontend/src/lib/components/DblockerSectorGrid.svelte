@@ -6,6 +6,8 @@
     export let showAdvancedActions = false;
     export let liveConfig: DBlockerConfig[] = [];
     export let editableConfig: DBlockerConfig[] = [];
+    export let disabled = false;
+    export let slaveDisconnected = false;
 
     export let onToggleSignal: (
         sectorIndex: number,
@@ -21,7 +23,7 @@
                 <div class="expanded-col">
                     {#each liveConfig.slice(0, 3) as config, index}
                         {@const sectorCfg = editableConfig[index] || config}
-                        <div class="sector interactive">
+                        <div class="sector interactive" class:sector-disabled={disabled}>
                             <div class="sector-title">Sector {index + 1}</div>
                             <div class="control-row">
                                 <div class="control-label">Block RC</div>
@@ -29,6 +31,7 @@
                                     <input
                                         type="checkbox"
                                         checked={sectorCfg.signal_ctrl}
+                                        disabled={disabled}
                                         on:change={() =>
                                             onToggleSignal(
                                                 index,
@@ -44,6 +47,7 @@
                                     <input
                                         type="checkbox"
                                         checked={sectorCfg.signal_gps}
+                                        disabled={disabled}
                                         on:change={() =>
                                             onToggleSignal(index, "signal_gps")}
                                     />
@@ -59,7 +63,8 @@
                         {@const sectorIndex = index + 3}
                         {@const sectorCfg =
                             editableConfig[sectorIndex] || config}
-                        <div class="sector interactive">
+                        {@const sectorDisabled = disabled || slaveDisconnected}
+                        <div class="sector interactive" class:sector-disabled={sectorDisabled}>
                             <div class="sector-title">
                                 Sector {sectorIndex + 1}
                             </div>
@@ -69,6 +74,7 @@
                                     <input
                                         type="checkbox"
                                         checked={sectorCfg.signal_ctrl}
+                                        disabled={sectorDisabled}
                                         on:change={() =>
                                             onToggleSignal(
                                                 sectorIndex,
@@ -84,6 +90,7 @@
                                     <input
                                         type="checkbox"
                                         checked={sectorCfg.signal_gps}
+                                        disabled={sectorDisabled}
                                         on:change={() =>
                                             onToggleSignal(
                                                 sectorIndex,
@@ -210,6 +217,11 @@
         );
         border-color: color-mix(in srgb, var(--separator) 75%, transparent);
         box-shadow: none;
+    }
+
+    .sector.sector-disabled {
+        opacity: 0.45;
+        pointer-events: none;
     }
 
     .sector-title {
