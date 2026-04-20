@@ -76,6 +76,8 @@ func main() {
 
 	bridgeHandler := handlerhttp.NewBridgeHandler(bridgeSvc)
 
+	sleepScheduleSvc := service.NewSleepScheduleService(dblockerRepo, mqttClient, fanControlSvc)
+
 	// Auth setup
 	userRepo := repository.NewUserRepository(db)
 	jwtSecret := getEnv("JWT_SECRET", "")
@@ -92,7 +94,7 @@ func main() {
 	//! remove this in production, only for development
 	r.Use(cors.Default())
 
-	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler, bridgeSvc, authSvc)
+	route.RegisterHTTPRoutes(r, db, mqttClient, bridgeHandler, bridgeSvc, authSvc, sleepScheduleSvc)
 
 	log.Printf("Starting dblocker server on :%s (bridging %s)", appPort, bridgeSvc.Topic())
 	if err := r.Run(":" + appPort); err != nil {

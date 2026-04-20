@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler, bridgeService *service.BridgeService, authService *service.AuthService) {
+func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, bridgeHandler *handlerhttp.BridgeHandler, bridgeService *service.BridgeService, authService *service.AuthService, sleepSchedule *service.SleepScheduleService) {
 
 	dblockerRepo := repository.NewDBlockerRepository(db)
 	scheduleRepo := repository.NewScheduleRepository(db)
@@ -22,7 +22,7 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	detectorRepo := repository.NewDetectorRepository(db)
 	droneEventRepo := repository.NewDroneEventRepository(db)
 
-	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, actionLogRepo, mqttClient, bridgeService)
+	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, actionLogRepo, mqttClient, bridgeService, sleepSchedule)
 	authHandler := handlerhttp.NewAuthHandler(authService)
 	scheduleHandler := handlerhttp.NewScheduleHandler(scheduleRepo, actionLogRepo, dblockerRepo)
 	actionLogHandler := handlerhttp.NewActionLogHandler(actionLogRepo)
@@ -60,10 +60,14 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.POST("/dblockers/wake/:id", dblockerHandler.WakeDBlocker)
 	api.PUT("/dblockers/preset", dblockerHandler.UpdatePresetConfig)
 	api.GET("/dblockers/monitor", dblockerHandler.GetMonitorStatus)
+	api.GET("/dblockers/monitor-settings", dblockerHandler.GetMonitorSettings)
+	api.PUT("/dblockers/monitor-settings", dblockerHandler.UpdateMonitorSettings)
 	api.GET("/dblockers/fan-thresholds", dblockerHandler.GetFanThresholds)
 	api.PUT("/dblockers/fan-thresholds", dblockerHandler.UpdateFanThresholds)
 	api.GET("/dblockers/temp-limits", dblockerHandler.GetTempLimits)
 	api.PUT("/dblockers/temp-limits", dblockerHandler.UpdateTempLimits)
+	api.GET("/dblockers/sleep-schedule", dblockerHandler.GetSleepSchedule)
+	api.PUT("/dblockers/sleep-schedule", dblockerHandler.UpdateSleepSchedule)
 	api.DELETE("/dblockers/:id", dblockerHandler.DeleteDBlocker)
 
 	// Schedules

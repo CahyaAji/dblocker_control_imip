@@ -14,14 +14,15 @@ import (
 )
 
 type DBlockerHandler struct {
-	Repo       *repository.DBlockerRepository
-	LogRepo    *repository.ActionLogRepository
-	MqttClient mqtt.Client
-	Bridge     *service.BridgeService
+	Repo          *repository.DBlockerRepository
+	LogRepo       *repository.ActionLogRepository
+	MqttClient    mqtt.Client
+	Bridge        *service.BridgeService
+	SleepSchedule *service.SleepScheduleService
 }
 
-func NewDBlockerHandler(repo *repository.DBlockerRepository, logRepo *repository.ActionLogRepository, mqttClient mqtt.Client, bridge *service.BridgeService) *DBlockerHandler {
-	return &DBlockerHandler{Repo: repo, LogRepo: logRepo, MqttClient: mqttClient, Bridge: bridge}
+func NewDBlockerHandler(repo *repository.DBlockerRepository, logRepo *repository.ActionLogRepository, mqttClient mqtt.Client, bridge *service.BridgeService, sleepSchedule *service.SleepScheduleService) *DBlockerHandler {
+	return &DBlockerHandler{Repo: repo, LogRepo: logRepo, MqttClient: mqttClient, Bridge: bridge, SleepSchedule: sleepSchedule}
 }
 
 // fanState returns the automatic fan state for a device given its config.
@@ -373,6 +374,37 @@ func (h *DBlockerHandler) GetMonitorStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": h.Bridge.Monitor().StatusAll()})
 }
 
+// GetMonitorSettings returns the current fail threshold and min current delta.
+func (h *DBlockerHandler) GetMonitorSettings(c *gin.Context) {
+	if h.Bridge == nil || h.Bridge.Monitor() == nil {
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"fail_threshold": 5, "min_current_delta": 1.0}})
+		return
+	}
+	ft, mcd := h.Bridge.Monitor().GetSettings()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"fail_threshold": ft, "min_current_delta": mcd}})
+}
+
+// UpdateMonitorSettings updates the fail threshold and min current delta.
+func (h *DBlockerHandler) UpdateMonitorSettings(c *gin.Context) {
+	var input struct {
+		FailThreshold   int     `json:"fail_threshold" binding:"required"`
+		MinCurrentDelta float64 `json:"min_current_delta" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if h.Bridge == nil || h.Bridge.Monitor() == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "monitor not available"})
+		return
+	}
+	if err := h.Bridge.Monitor().SetSettings(input.FailThreshold, input.MinCurrentDelta); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"fail_threshold": input.FailThreshold, "min_current_delta": input.MinCurrentDelta}})
+}
+
 // GetFanThresholds returns the current fan ON/OFF temperature thresholds.
 func (h *DBlockerHandler) GetFanThresholds(c *gin.Context) {
 	if h.Bridge == nil || h.Bridge.FanControl() == nil {
@@ -693,4 +725,47 @@ func (h *DBlockerHandler) UpdatePresetConfig(c *gin.Context) {
 		"message": "Preset config saved successfully",
 		"data":    input,
 	})
+}
+
+// GetSleepSchedule returns the current global sleep/wake schedule settings.
+func (h *DBlockerHandler) GetSleepSchedule(c *gin.Context) {
+	if h.SleepSchedule == nil {
+		c.JSON(http.StatusOK, gin.H{"data": gin.H{"enabled": false, "sleep_time": "22:00", "wake_time": "06:00", "timezone": "+07:00"}})
+		return
+	}
+	enabled, sleepTime, wakeTime, tz := h.SleepSchedule.GetSettings()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"enabled":    enabled,
+		"sleep_time": sleepTime,
+		"wake_time":  wakeTime,
+		"timezone":   tz,
+	}})
+}
+
+// UpdateSleepSchedule updates the global sleep/wake schedule settings.
+func (h *DBlockerHandler) UpdateSleepSchedule(c *gin.Context) {
+	var input struct {
+		Enabled   bool   `json:"enabled"`
+		SleepTime string `json:"sleep_time" binding:"required"`
+		WakeTime  string `json:"wake_time" binding:"required"`
+		Timezone  string `json:"timezone" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if h.SleepSchedule == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "sleep schedule not available"})
+		return
+	}
+	if err := h.SleepSchedule.SetSettings(input.Enabled, input.SleepTime, input.WakeTime, input.Timezone); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"enabled":    input.Enabled,
+		"sleep_time": input.SleepTime,
+		"wake_time":  input.WakeTime,
+		"timezone":   input.Timezone,
+	}})
 }
