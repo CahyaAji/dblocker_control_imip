@@ -1,19 +1,17 @@
 <script lang="ts">
     import { slide } from "svelte/transition";
-    import type { DBlockerConfig, SectorCurrents } from "../store/dblockerStore";
+    import type { DBlockerConfig } from "../store/dblockerStore";
 
     export let isExpanded = false;
     export let showAdvancedActions = false;
     export let liveConfig: DBlockerConfig[] = [];
     export let editableConfig: DBlockerConfig[] = [];
-    export let liveSectorCurrents: SectorCurrents[] | null = null;
-    export let savedSectorCurrents: SectorCurrents[] | null = null;
 
     export let onToggleSignal: (
         sectorIndex: number,
         key: keyof DBlockerConfig,
     ) => void;
-    export let onAdvancedAction: (action: "sleep" | "reboot") => void;
+    export let onAdvancedAction: (action: "sleep" | "reboot" | "wake") => void;
 </script>
 
 <div class="content-wrap" class:expanded={isExpanded}>
@@ -40,14 +38,6 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
-                            {#if sectorCfg.signal_ctrl && (savedSectorCurrents || liveSectorCurrents)}
-                                <div class="debug-current">
-                                    RC1 S:{savedSectorCurrents?.[index]?.ctrl1.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[index]?.ctrl1.toFixed(2) ?? '—'}
-                                </div>
-                                <div class="debug-current">
-                                    RC2 S:{savedSectorCurrents?.[index]?.ctrl2.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[index]?.ctrl2.toFixed(2) ?? '—'}
-                                </div>
-                            {/if}
                             <div class="control-row">
                                 <div class="control-label">Block GPS</div>
                                 <label class="switch">
@@ -60,11 +50,6 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
-                            {#if sectorCfg.signal_gps && (savedSectorCurrents || liveSectorCurrents)}
-                                <div class="debug-current">
-                                    GPS S:{savedSectorCurrents?.[index]?.gps.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[index]?.gps.toFixed(2) ?? '—'}
-                                </div>
-                            {/if}
                         </div>
                     {/each}
                 </div>
@@ -93,14 +78,6 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
-                            {#if sectorCfg.signal_ctrl && (savedSectorCurrents || liveSectorCurrents)}
-                                <div class="debug-current">
-                                    RC1 S:{savedSectorCurrents?.[sectorIndex]?.ctrl1.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[sectorIndex]?.ctrl1.toFixed(2) ?? '—'}
-                                </div>
-                                <div class="debug-current">
-                                    RC2 S:{savedSectorCurrents?.[sectorIndex]?.ctrl2.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[sectorIndex]?.ctrl2.toFixed(2) ?? '—'}
-                                </div>
-                            {/if}
                             <div class="control-row">
                                 <div class="control-label">Block GPS</div>
                                 <label class="switch">
@@ -116,11 +93,6 @@
                                     <span class="slider"></span>
                                 </label>
                             </div>
-                            {#if sectorCfg.signal_gps && (savedSectorCurrents || liveSectorCurrents)}
-                                <div class="debug-current">
-                                    GPS S:{savedSectorCurrents?.[sectorIndex]?.gps.toFixed(2) ?? '—'} → L:{liveSectorCurrents?.[sectorIndex]?.gps.toFixed(2) ?? '—'}
-                                </div>
-                            {/if}
                         </div>
                     {/each}
                 </div>
@@ -139,6 +111,13 @@
                             on:click={() => onAdvancedAction("sleep")}
                         >
                             Sleep DBlocker
+                        </button>
+                        <button
+                            class="advanced-action-btn wake"
+                            type="button"
+                            on:click={() => onAdvancedAction("wake")}
+                        >
+                            Wake DBlocker
                         </button>
                         <button
                             class="advanced-action-btn reboot"
@@ -260,16 +239,6 @@
         letter-spacing: 0.02em;
     }
 
-    .debug-current {
-        font-size: 10px;
-        font-family: monospace;
-        color: var(--text-secondary);
-        padding: 1px 4px;
-        background: color-mix(in srgb, var(--bg-elevated) 40%, transparent);
-        border-radius: 4px;
-        opacity: 0.85;
-    }
-
     .sector :global(.switch) {
         transform: scale(0.92);
         transform-origin: right center;
@@ -347,6 +316,11 @@
     .advanced-action-btn.sleep:hover {
         background: color-mix(in srgb, #f59e0b 20%, var(--card-bg) 80%);
         border-color: color-mix(in srgb, #f59e0b 45%, transparent);
+    }
+
+    .advanced-action-btn.wake:hover {
+        background: color-mix(in srgb, #22c55e 20%, var(--card-bg) 80%);
+        border-color: color-mix(in srgb, #22c55e 45%, transparent);
     }
 
     .advanced-action-btn.reboot:hover {
