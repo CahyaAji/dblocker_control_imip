@@ -419,6 +419,155 @@ func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 	}
 }
 
+func (h *DBlockerHandler) SleepDBlocker(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	dblocker, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	// Turn off all outputs first
+	allOffConfig := [6]models.DBlockerConfig{
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+		{SignalGPS: false, SignalCtrl: false},
+	}
+
+	if err := h.Repo.UpdateConfig(uint(id), allOffConfig[:]); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
+
+	bitmaskPayload, err := service.DBlockerConfigToBitmask(allOffConfig[:], false, false)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	offPayload := []byte{byte(bitmaskPayload >> 8), byte(bitmaskPayload)}
+	if err := h.MqttClient.Publish(topic, 1, true, offPayload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish off command"})
+		return
+	}
+
+	// Then send sleep command
+	if err := h.MqttClient.Publish(topic, 1, false, []byte("SLEEP")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish sleep command"})
+		return
+	}
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "sleep",
+			DBlockerID:   uint(id),
+			DBlockerName: dblocker.Name,
+			Config:       allOffConfig[:],
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Sleep command sent successfully"})
+}
+
+func (h *DBlockerHandler) RebootDBlocker(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	dblocker, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
+
+	if err := h.MqttClient.Publish(topic, 1, false, []byte("WAKE_RST")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish reboot command"})
+		return
+	}
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "reboot",
+			DBlockerID:   uint(id),
+			DBlockerName: dblocker.Name,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Reboot command sent successfully"})
+}
+
+func (h *DBlockerHandler) WakeDBlocker(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	dblocker, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
+
+	if err := h.MqttClient.Publish(topic, 1, false, []byte("WAKE")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish wake command"})
+		return
+	}
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "wake",
+			DBlockerID:   uint(id),
+			DBlockerName: dblocker.Name,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Wake command sent successfully"})
+}
+
 func (h *DBlockerHandler) UpdatePresetConfig(c *gin.Context) {
 	var input models.DBlockerConfigUpdate
 	if err := c.ShouldBindJSON(&input); err != nil {
