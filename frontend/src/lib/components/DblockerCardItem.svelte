@@ -33,10 +33,11 @@
     type ParsedRpt = {
         sectors: SectorCurrents[];
         temperatureC: number | null;
+        slaveConnected: boolean | null;
     };
 
     const parseRpt = (payload: string): ParsedRpt | null => {
-        const [numericPart] = payload.split("|");
+        const [numericPart, digitalPart] = payload.split("|");
         if (!numericPart) return null;
 
         const values = numericPart
@@ -52,7 +53,10 @@
             ctrl2: calculateCurrentA(values[s * 3 + 2]),
         }));
 
-        return { sectors, temperatureC: calculateTemperatureC(values[18]) };
+        const digitalRaw = (digitalPart ?? "").trim();
+        const slaveConnected = digitalRaw === "1" ? true : digitalRaw === "0" ? false : null;
+
+        return { sectors, temperatureC: calculateTemperatureC(values[18]), slaveConnected };
     };
 
     export let dblocker: DBlocker;
@@ -70,6 +74,8 @@
     $: rptPayload = $bridgeStore[rptTopic] ?? null;
     $: parsedRpt = rptPayload ? parseRpt(rptPayload) : null;
     $: liveTemperatureC = parsedRpt?.temperatureC ?? null;
+    $: slaveConnected = parsedRpt?.slaveConnected ?? null;
+    $: isOnline = staPayload?.startsWith('ON') ?? false;
 
     // --- Monitor status from backend ---
     let monitorErrors: string[] = [];
@@ -92,6 +98,8 @@
 
     $: warningTitle = warningState === "error"
         ? `Error: ${monitorErrors.join(', ')} current lower than expected`
+        : !isOnline ? "Device is not online"
+        : slaveConnected === false ? "Slave not connected"
         : "Normal";
 
     
@@ -216,10 +224,15 @@
             <div
                 class="warning-indicator"
                 class:is-error={warningState === "error"}
+                class:is-warn={warningState !== "error" && (!isOnline || slaveConnected === false)}
                 title={warningTitle}
                 aria-label={warningTitle}
             >
                 {#if warningState === "error"}
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3L2.6 19.2A1.2 1.2 0 003.64 21h16.72a1.2 1.2 0 001.04-1.8L12 3zm1 13h-2v-2h2v2zm0-4h-2V8h2v4z" />
+                    </svg>
+                {:else if !isOnline || slaveConnected === false}
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path d="M12 3L2.6 19.2A1.2 1.2 0 003.64 21h16.72a1.2 1.2 0 001.04-1.8L12 3zm1 13h-2v-2h2v2zm0-4h-2V8h2v4z" />
                     </svg>
@@ -231,11 +244,19 @@
             </div>
         </div>
     </div>
+    {#if isExpanded && !isOnline}
+        <div class="disabled-notice">Device is not online</div>
+    {/if}
+    {#if isExpanded && isOnline && slaveConnected === false}
+        <div class="disabled-notice warn">Slave not connected</div>
+    {/if}
     <DblockerSectorGrid
         {isExpanded}
         {showAdvancedActions}
         {liveConfig}
         {editableConfig}
+        disabled={!isOnline}
+        slaveDisconnected={slaveConnected === false}
         onToggleSignal={toggleEditableSignal}
         onAdvancedAction={handleAdvancedAction}
     />
@@ -244,6 +265,8 @@
         {isExpanded}
         {canReadLastState}
         {showAdvancedActions}
+        disabled={!isOnline}
+        presetDisabled={!isOnline || slaveConnected === false}
         hasPreset={Array.isArray(dblocker.preset_config) && dblocker.preset_config.length === 6}
         onReadLastState={reloadFromLatest}
         onApply={applyConfig}
@@ -378,9 +401,32 @@
         border-color: color-mix(in srgb, var(--accent-red, #d32f2f) 40%, transparent 60%);
     }
 
+    .warning-indicator.is-warn {
+        color: #e65100;
+        background: color-mix(in srgb, #ff9800 14%, white 86%);
+        border-color: color-mix(in srgb, #ff9800 40%, transparent 60%);
+    }
+
     .warning-indicator svg {
         width: 14px;
         height: 14px;
         fill: currentColor;
+    }
+
+    .disabled-notice {
+        font-size: 11px;
+        font-weight: 700;
+        text-align: center;
+        padding: 6px 10px;
+        border-radius: 8px;
+        color: var(--text-secondary);
+        background: color-mix(in srgb, var(--separator) 30%, transparent);
+        border: 1px solid color-mix(in srgb, var(--separator) 50%, transparent);
+    }
+
+    .disabled-notice.warn {
+        color: #e65100;
+        background: color-mix(in srgb, #ff9800 12%, var(--card-bg) 88%);
+        border-color: color-mix(in srgb, #ff9800 35%, transparent);
     }
 </style>
