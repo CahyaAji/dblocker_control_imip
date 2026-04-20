@@ -111,3 +111,40 @@ export async function presetOn(blockerId: number) {
     }
 }
 
+export async function sleepDBlocker(blockerId: number) {
+    try {
+        const res = await authFetch(`${API_BASE}/api/dblockers/sleep/${blockerId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to send sleep command');
+        await fetchDBlockers();
+    } catch (err) {
+        console.error('Failed to send sleep command:', err);
+        alert('Failed to send sleep command. Check connection.');
+    }
+}
+
+export async function rebootDBlocker(blockerId: number) {
+    try {
+        const res = await authFetch(`${API_BASE}/api/dblockers/reboot/${blockerId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to send reboot command');
+    } catch (err) {
+        console.error('Failed to send reboot command:', err);
+        alert('Failed to send reboot command. Check connection.');
+    }
+}
+
+export async function wakeDBlocker(blockerId: number) {
+    try {
+        const res = await authFetch(`${API_BASE}/api/dblockers/wake/${blockerId}`, {
+            method: 'POST',
+        });
+        if (!res.ok) throw new Error('Failed to send wake command');
+    } catch (err) {
+        console.error('Failed to send wake command:', err);
+        alert('Failed to send wake command. Check connection.');
+    }
+}
+
