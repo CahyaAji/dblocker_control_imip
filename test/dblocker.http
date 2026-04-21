@@ -258,7 +258,7 @@ Authorization: Bearer {{token}}
     "name": "Detector 1",
     "latitude": -2.81968,
     "longitude": 122.15309,
-    "host": "10.42.0.1",
+    "host": "10.88.81.14",
     "port": 5555
 }
 
