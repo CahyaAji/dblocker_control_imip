@@ -287,7 +287,7 @@ func parseDroneData(label string, data []byte) {
 	go postDroneEvent(label, d)
 
 	// Auto-activate blockers based on drone position (disabled)
-	// go autoActivateBlockers(label, d)
+	go autoActivateBlockers(label, d)
 }
 
 func trimNull(s string) string {
@@ -383,11 +383,12 @@ type blockerRule struct {
 // ============================================================
 var detectorRules = map[string][]blockerRule{
 	"Detector 1": {
-		{headingMin: 0, headingMax: 120, blockerSerials: []string{"250001"}},
-		{headingMin: 120, headingMax: 240, blockerSerials: []string{"250003"}},
+		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250006", "250007"}},
+		{headingMin: 270, headingMax: 360, blockerSerials: []string{"250001", "250002", "250003", "250004", "250005"}},
 	},
 	"Detector 2": {
-		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250001", "250002"}},
+		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250008", "250009"}},
+		{headingMin: 90, headingMax: 180, blockerSerials: []string{"250009", "250010"}},
 	},
 }
 
