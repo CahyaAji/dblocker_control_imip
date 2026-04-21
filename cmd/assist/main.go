@@ -238,31 +238,42 @@ type DetectorEntry struct {
 }
 
 func startDetectorsFromDB() {
-	req, err := http.NewRequest("GET", backendURL+"/api/detectors", nil)
-	if err != nil {
-		log.Printf("warn: failed to create detector request: %v", err)
-		return
-	}
-	req.Header.Set("X-API-Key", apiKey)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("warn: failed to fetch detectors from DB: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Printf("warn: detector fetch returned status %d", resp.StatusCode)
-		return
-	}
-
+	// Retry until the backend is reachable (handles assist starting before app is ready).
 	var result struct {
 		Data []DetectorEntry `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		log.Printf("warn: failed to decode detectors: %v", err)
-		return
+	for {
+		req, err := http.NewRequest("GET", backendURL+"/api/detectors", nil)
+		if err != nil {
+			log.Printf("warn: failed to create detector request: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		req.Header.Set("X-API-Key", apiKey)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("warn: failed to fetch detectors from DB: %v, retrying in 5s...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			log.Printf("warn: detector fetch returned status %d, retrying in 5s...", resp.StatusCode)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		err = json.NewDecoder(resp.Body).Decode(&result)
+		resp.Body.Close()
+		if err != nil {
+			log.Printf("warn: failed to decode detectors: %v, retrying in 5s...", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		break
 	}
 
 	if len(result.Data) == 0 {
