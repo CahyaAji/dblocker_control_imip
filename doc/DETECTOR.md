@@ -1,5 +1,10 @@
 # Drone Detector Setup
 
+```
+restart docker if error -> detector always offline
+docker compose restart assist
+```
+
 ## Overview
 
 Drone detectors are devices that detect nearby drones via RF scanning. When a drone is detected, the system automatically activates the nearest blocker sectors pointing toward the drone.
