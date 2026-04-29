@@ -38,6 +38,7 @@ const DEVICE_ALT = 50;
 // Simulated drone parameters
 const DRONE_UID = "SIM-DRONE-001";
 const DRONE_NAME = "DJI Mavic Sim";
+const DRONE_HEADING = 45; // Bearing from detector to drone (degrees, 0–359)
 const DRONE_BASE_LAT = -2.81;
 const DRONE_BASE_LNG = 122.14;
 const DRONE_ALT = 120;
@@ -157,7 +158,7 @@ function buildDroneTarget() {
     DRONE_BASE_LAT + radius * Math.cos(droneAngle * DEG_TO_RAD);
   const droneLng =
     DRONE_BASE_LNG + radius * Math.sin(droneAngle * DEG_TO_RAD);
-  const heading = Math.floor(droneAngle);
+  const heading = DRONE_HEADING;
   const distance = 800 + Math.floor(200.0 * Math.sin(droneAngle * DEG_TO_RAD));
   const speed = 12.5 + 3.0 * Math.sin(droneAngle * DEG_TO_RAD * 2.0);
 
