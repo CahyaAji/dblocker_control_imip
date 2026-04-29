@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -15,6 +16,19 @@ import (
 )
 
 var startFlag = []byte{0xEE, 0xEE, 0xEE, 0xEE}
+
+// holdSeconds is the minimum time (seconds) a dblocker stays ON after the last detection.
+// It is refreshed from the backend API by startHoldSettingSync.
+var (
+	holdSeconds   int = 30
+	holdSecondsMu sync.RWMutex
+)
+
+// holdTimers tracks per-serial auto-off timers.
+var (
+	holdTimersMu sync.Mutex
+	holdTimers   = map[string]*time.Timer{}
+)
 
 // MonitoringData represents a heartbeat/status frame from the drone detector.
 type MonitoringData struct {
@@ -60,7 +74,7 @@ type DroneData struct {
 // StartDroneDetector connects to a drone detector device via TCP and parses its binary protocol.
 // It reconnects automatically with exponential backoff on connection failures.
 func StartDroneDetector(label, host string, port int, lat, lng float64) {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	log.Printf("[%s] detector location: %.6f, %.6f (from database)", label, lat, lng)
 	backoff := 5 * time.Second
 	const maxBackoff = 60 * time.Second
@@ -68,7 +82,7 @@ func StartDroneDetector(label, host string, port int, lat, lng float64) {
 	for {
 		log.Printf("[%s] connecting to drone detector at %s...", label, addr)
 
-		conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
+		conn, err := net.DialTimeout("tcp4", addr, 10*time.Second)
 		if err != nil {
 			log.Printf("[%s] connection failed: %v, retrying in %s...", label, err, backoff)
 			reportDetectorStatus(host, port, "offline")
@@ -116,7 +130,11 @@ func processBuffer(label string, buf []byte) []byte {
 		// Find start flag 0xEEEEEEEE
 		idx := findStartFlag(buf)
 		if idx == -1 {
-			return buf[:0]
+			// Keep the last 3 bytes in case they are a partial start flag
+			if len(buf) > 3 {
+				return buf[len(buf)-3:]
+			}
+			return buf
 		}
 		if idx > 0 {
 			buf = buf[idx:]
@@ -269,6 +287,8 @@ func parseDroneData(label string, data []byte) {
 		FlightSpeed:    math.Float64frombits(binary.LittleEndian.Uint64(data[off+61 : off+69])),
 	}
 
+	// LOGIC MARK: Detection processing starts here. No frequency filter is applied.
+
 	log.Printf("[%s] === TARGET IDENTIFIED: %s ===", label, d.TargetName)
 	log.Printf("[%s]   Unique ID:    %s", label, d.UniqueID)
 	log.Printf("[%s]   Target ID:    %d", label, d.TargetID)
@@ -283,11 +303,11 @@ func parseDroneData(label string, data []byte) {
 	log.Printf("[%s]   Confidence:   %d%%  Timestamp: %d",
 		label, d.Confidence, d.Timestamp)
 
-	// Post drone event to backend
+	// LOGIC MARK: This line triggers the write to the database (via API POST)
 	go postDroneEvent(label, d)
 
-	// Auto-activate blockers based on drone position (disabled)
-	go autoActivateBlockers(label, d)
+	// LOGIC MARK: This triggers automatic blocker activation based on detection
+	// go autoActivateBlockers(label, d)
 }
 
 func trimNull(s string) string {
@@ -330,7 +350,10 @@ func postDroneEvent(label string, d DroneData) {
 		return
 	}
 
-	req, err := http.NewRequest("POST", backendURL+"/api/drone-events", bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", backendURL+"/api/drone-events", bytes.NewReader(body))
 	if err != nil {
 		log.Printf("[%s] failed to create drone event request: %v", label, err)
 		return
@@ -425,7 +448,10 @@ func resolveBlockerID(label, serial string) (uint, bool) {
 
 // refreshBlockerCache fetches all dblockers from the API and rebuilds the serial→ID cache.
 func refreshBlockerCache() error {
-	req, err := http.NewRequest("GET", backendURL+"/api/dblockers", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/dblockers", nil)
 	if err != nil {
 		return err
 	}
@@ -481,7 +507,7 @@ func autoActivateBlockers(label string, d DroneData) {
 			for _, serial := range rule.blockerSerials {
 				log.Printf("[%s] heading %d° matches rule [%d-%d°) → activating dblocker serial %q preset",
 					label, heading, rule.headingMin, rule.headingMax, serial)
-				go applyBlockerPreset(label, serial)
+				go scheduleBlockerOff(label, serial)
 			}
 		}
 	}
@@ -495,7 +521,10 @@ func applyBlockerPreset(label, serial string) {
 	}
 
 	url := fmt.Sprintf("%s/api/dblockers/config/preset/%d", backendURL, blockerID)
-	req, err := http.NewRequest("GET", url, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		log.Printf("[%s] applyBlockerPreset: failed to create request for dblocker %q: %v", label, serial, err)
 		return
@@ -511,6 +540,105 @@ func applyBlockerPreset(label, serial string) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[%s] applyBlockerPreset: dblocker %q returned status %d", label, serial, resp.StatusCode)
+	}
+}
+
+// scheduleBlockerOff activates a dblocker preset and sets (or resets) its auto-off hold timer.
+func scheduleBlockerOff(label, serial string) {
+	// Activate (or keep active) the blocker preset.
+	go applyBlockerPreset(label, serial)
+
+	holdSecondsMu.RLock()
+	dur := time.Duration(holdSeconds) * time.Second
+	holdSecondsMu.RUnlock()
+
+	holdTimersMu.Lock()
+	defer holdTimersMu.Unlock()
+
+	if t, ok := holdTimers[serial]; ok {
+		// Detection came in before timer fired — reset the countdown.
+		t.Reset(dur)
+		return
+	}
+
+	// First detection: create a new timer.
+	holdTimers[serial] = time.AfterFunc(dur, func() {
+		log.Printf("[%s] hold timer expired for dblocker %q — turning off", label, serial)
+		go turnOffBlocker(label, serial)
+		holdTimersMu.Lock()
+		delete(holdTimers, serial)
+		holdTimersMu.Unlock()
+	})
+}
+
+// turnOffBlocker calls the all-off endpoint for a dblocker by serial number.
+func turnOffBlocker(label, serial string) {
+	blockerID, ok := resolveBlockerID(label, serial)
+	if !ok {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/dblockers/config/off/%d", backendURL, blockerID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		log.Printf("[%s] turnOffBlocker: failed to create request for dblocker %q: %v", label, serial, err)
+		return
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[%s] turnOffBlocker: request failed for dblocker %q: %v", label, serial, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[%s] turnOffBlocker: dblocker %q returned status %d", label, serial, resp.StatusCode)
+	}
+}
+
+// startHoldSettingSync polls the backend every minute and updates holdSeconds.
+func startHoldSettingSync() {
+	go func() {
+		for {
+			fetchAndUpdateHoldSeconds()
+			time.Sleep(60 * time.Second)
+		}
+	}()
+}
+
+func fetchAndUpdateHoldSeconds() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/detectors/settings", nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			HoldSeconds int `json:"hold_seconds"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return
+	}
+	if result.Data.HoldSeconds >= 5 {
+		holdSecondsMu.Lock()
+		holdSeconds = result.Data.HoldSeconds
+		holdSecondsMu.Unlock()
 	}
 }
 
@@ -539,7 +667,10 @@ func reportDetectorStatus(host string, port int, status string) {
 	}
 	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("PUT", backendURL+"/api/detectors/status", bytes.NewReader(body))
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "PUT", backendURL+"/api/detectors/status", bytes.NewReader(body))
 	if err != nil {
 		return
 	}
@@ -551,5 +682,5 @@ func reportDetectorStatus(host string, port int, status string) {
 		log.Printf("warn: failed to report detector status: %v", err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
 }

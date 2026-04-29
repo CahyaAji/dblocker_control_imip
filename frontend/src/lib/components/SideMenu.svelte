@@ -6,6 +6,7 @@
     import CurrentMonitorSettingsCard from "./CurrentMonitorSettingsCard.svelte";
     import SleepScheduleCard from "./SleepScheduleCard.svelte";
     import ScheduleManager from "./ScheduleManager.svelte";
+    import DetectionSettingsCard from "./DetectionSettingsCard.svelte";
 
     let activeTab = $state("dblocker");
 </script>
@@ -29,6 +30,7 @@
 
     {#if activeTab === "settings"}
         <div class="settings-content">
+            <DetectionSettingsCard />
             <FanSettingsCard />
             <TempLimitSettingsCard />
             <CurrentMonitorSettingsCard />
