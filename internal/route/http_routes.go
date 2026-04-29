@@ -92,6 +92,8 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.POST("/drone-events", detectorHandler.CreateDroneEvent)
 	api.DELETE("/drone-events", detectorHandler.DeleteDroneEventsByDate)
 	api.PUT("/detectors/status", detectorHandler.UpdateDetectorStatus)
+	api.GET("/detectors/settings", detectorHandler.GetDetectionSettings)
+	api.PUT("/detectors/settings", detectorHandler.UpdateDetectionSettings)
 
 	//! make sure frontend is built first: npm run build (inside frontend/)
 

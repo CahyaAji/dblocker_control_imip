@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,6 +62,7 @@ func main() {
 
 	// Start drone detector connections from database
 	startDetectorsFromDB()
+	startHoldSettingSync()
 
 	// Track which schedules already executed this minute to avoid duplicates.
 	// Key: "scheduleID:HH:MM"
@@ -82,8 +84,8 @@ func runSchedules(executed map[string]bool) {
 
 	// Clean old entries (anything not matching current minute)
 	for k := range executed {
-		// Keys are "id:HH:MM" — keep only current minute
-		if len(k) > 0 {
+		// Keys are "id:HH:MM" — safety check length before slicing
+		if len(k) >= 5 {
 			parts := k[len(k)-5:]
 			if parts != currentTime {
 				delete(executed, k)
@@ -91,7 +93,10 @@ func runSchedules(executed map[string]bool) {
 		}
 	}
 
-	schedules, err := fetchSchedules()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	schedules, err := fetchSchedules(ctx)
 	if err != nil {
 		log.Printf("error fetching schedules: %v", err)
 		return
@@ -111,7 +116,7 @@ func runSchedules(executed map[string]bool) {
 		}
 
 		log.Printf("executing schedule #%d for dblocker #%d at %s UTC", s.ID, s.DBlockerID, currentTime)
-		if err := applyConfig(s); err != nil {
+		if err := applyConfig(ctx, s); err != nil {
 			log.Printf("error applying schedule #%d: %v", s.ID, err)
 			continue
 		}
@@ -119,14 +124,14 @@ func runSchedules(executed map[string]bool) {
 		log.Printf("schedule #%d applied successfully", s.ID)
 
 		// Log the action
-		if err := createActionLog(s); err != nil {
+		if err := createActionLog(ctx, s); err != nil {
 			log.Printf("warn: failed to log schedule #%d: %v", s.ID, err)
 		}
 	}
 }
 
-func fetchSchedules() ([]Schedule, error) {
-	req, err := http.NewRequest("GET", backendURL+"/api/schedules", nil)
+func fetchSchedules(ctx context.Context) ([]Schedule, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/schedules", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +155,7 @@ func fetchSchedules() ([]Schedule, error) {
 	return result.Data, nil
 }
 
-func applyConfig(s Schedule) error {
+func applyConfig(ctx context.Context, s Schedule) error {
 	var config [6]DBlockerConfig
 	for i := 0; i < 6 && i < len(s.Config); i++ {
 		config[i] = s.Config[i]
@@ -166,7 +171,7 @@ func applyConfig(s Schedule) error {
 		return err
 	}
 
-	req, err := http.NewRequest("PUT", backendURL+"/api/dblockers/config", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "PUT", backendURL+"/api/dblockers/config", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -194,7 +199,7 @@ type ActionLogPayload struct {
 	Config       []DBlockerConfig `json:"config"`
 }
 
-func createActionLog(s Schedule) error {
+func createActionLog(ctx context.Context, s Schedule) error {
 	payload := ActionLogPayload{
 		Username:     fmt.Sprintf("assistant[%s]", s.CreatedBy),
 		Action:       "scheduled_config_update",
@@ -208,7 +213,7 @@ func createActionLog(s Schedule) error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", backendURL+"/api/logs", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", backendURL+"/api/logs", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -243,8 +248,10 @@ func startDetectorsFromDB() {
 		Data []DetectorEntry `json:"data"`
 	}
 	for {
-		req, err := http.NewRequest("GET", backendURL+"/api/detectors", nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/detectors", nil)
 		if err != nil {
+			cancel()
 			log.Printf("warn: failed to create detector request: %v", err)
 			time.Sleep(5 * time.Second)
 			continue
@@ -253,6 +260,7 @@ func startDetectorsFromDB() {
 
 		resp, err := client.Do(req)
 		if err != nil {
+			cancel()
 			log.Printf("warn: failed to fetch detectors from DB: %v, retrying in 5s...", err)
 			time.Sleep(5 * time.Second)
 			continue
@@ -260,6 +268,7 @@ func startDetectorsFromDB() {
 
 		if resp.StatusCode != http.StatusOK {
 			resp.Body.Close()
+			cancel()
 			log.Printf("warn: detector fetch returned status %d, retrying in 5s...", resp.StatusCode)
 			time.Sleep(5 * time.Second)
 			continue
@@ -267,6 +276,7 @@ func startDetectorsFromDB() {
 
 		err = json.NewDecoder(resp.Body).Decode(&result)
 		resp.Body.Close()
+		cancel()
 		if err != nil {
 			log.Printf("warn: failed to decode detectors: %v, retrying in 5s...", err)
 			time.Sleep(5 * time.Second)

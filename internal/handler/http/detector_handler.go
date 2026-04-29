@@ -6,9 +6,17 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+)
+
+// detectionHoldSecs is the number of seconds a dblocker stays ON after the last detection.
+// Default is 30. Guarded by detectionHoldSecsMu.
+var (
+	detectionHoldSecs   int = 30
+	detectionHoldSecsMu sync.RWMutex
 )
 
 type DetectorHandler struct {
@@ -202,4 +210,31 @@ func (h *DetectorHandler) UpdateDetectorStatus(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "status updated", "detector_id": detector.ID, "status": input.Status})
+}
+
+// GetDetectionSettings returns the current blocker hold time after a detection.
+func (h *DetectorHandler) GetDetectionSettings(c *gin.Context) {
+	detectionHoldSecsMu.RLock()
+	secs := detectionHoldSecs
+	detectionHoldSecsMu.RUnlock()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"hold_seconds": secs}})
+}
+
+// UpdateDetectionSettings updates the blocker hold time after a detection.
+func (h *DetectorHandler) UpdateDetectionSettings(c *gin.Context) {
+	var input struct {
+		HoldSeconds int `json:"hold_seconds"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if input.HoldSeconds < 5 || input.HoldSeconds > 3600 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "hold_seconds must be between 5 and 3600"})
+		return
+	}
+	detectionHoldSecsMu.Lock()
+	detectionHoldSecs = input.HoldSeconds
+	detectionHoldSecsMu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{"hold_seconds": input.HoldSeconds}})
 }
