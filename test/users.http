@@ -1,0 +1,36 @@
+# @host = http://10.88.81.16:8080
+@host = http://localhost:8080
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzc5NDc5MDAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.9D5pzHyNnrGwPU8kRuEaRUjrpWYvk5JtWOh7gMBO6wQ
+
+### 0a. Login (get token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+    "username": "aji",
+    "password": "zxcjkl01"
+}
+
+### 0b. Create User (admin only)
+POST {{host}}/api/users
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "username": "operator1",
+    "password": "operator123",
+    "is_admin": false
+}
+
+### 0c. List Users (admin only)
+GET {{host}}/api/users
+Authorization: Bearer {{token}}
+
+### 0d. Delete User (admin only)
+DELETE {{host}}/api/users/2
+Authorization: Bearer {{token}}
+
+### 0e. Get Current User
+GET {{host}}/api/auth/me
+Authorization: Bearer {{token}}

@@ -1,0 +1,179 @@
+# @host = http://10.88.81.16:8080
+@host = http://localhost:8080
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzc5NDc5MDAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.9D5pzHyNnrGwPU8kRuEaRUjrpWYvk5JtWOh7gMBO6wQ
+
+### 1. Register DBlocker
+POST {{host}}/api/dblockers
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+# {
+#     "name": "1 Runway 13 Bandara",
+#     "serial_numb": "250001",
+#     "ip": "10.88.81.2",
+#     "latitude": -2.793327,
+#     "longitude": 122.131681,
+#     "desc": "Blocker 1 Runway 13 Bandara",
+#     "angle_start": 10
+# }
+
+# {
+#     "name": "2 Edu Park IMIP",
+#     "serial_numb": "250002",
+#     "ip": "10.88.81.3",
+#     "latitude": -2.797881,
+#     "longitude": 122.141956,
+#     "desc": "Blocker 2 Edu Park IMIP",
+#     "angle_start": -15
+# }
+
+# {
+#     "name": "3 Guest House Bandara",
+#     "serial_numb": "250003",
+#     "ip": "10.88.81.4",
+#     "latitude": -2.803150,
+#     "longitude": 122.136204,
+#     "desc": "Blocker 3 Guest House Bandara",
+#     "angle_start": -15
+# }
+
+# {
+#     "name": "4 Jalan Hauling CTLI",
+#     "serial_numb": "250004",
+#     "ip": "10.88.81.5",
+#     "latitude": -2.820297,
+#     "longitude": 122.128276,
+#     "desc": "Blocker 4 Jalan Hauling CTLI",
+#     "angle_start": -5
+# }
+
+# {
+#     "name": "5 Terminal Utama Tsingsan",
+#     "serial_numb": "250005",
+#     "ip": "10.88.81.6",
+#     "latitude": -2.808731,
+#     "longitude": 122.147636,
+#     "desc": "Blocker 5 Terminal Utama Tsingsan",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "6 Runway 31 Bandara",
+#     "serial_numb": "250006",
+#     "ip": "10.88.81.7",
+#     "latitude": -2.805106,
+#     "longitude": 122.150056,
+#     "desc": "Blocker 6 Runway 31 Bandara",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "7 Jetty Pulau",
+#     "serial_numb": "250007",
+#     "ip": "10.88.81.8",
+#     "latitude": -2.819208,
+#     "longitude": 122.165358,
+#     "desc": "Blocker 7 Jetty Pulau",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "8 DSI",
+#     "serial_numb": "250008",
+#     "ip": "10.88.81.9",
+#     "latitude": -2.836170,
+#     "longitude": 122.184159,
+#     "desc": "Blocker 8 DSI",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "9 Jetty Labota",
+#     "serial_numb": "250009",
+#     "ip": "10.88.81.10",
+#     "latitude": -2.855143,
+#     "longitude": 122.182330,
+#     "desc": "Blocker 9 Jetty Labota",
+#     "angle_start": 0
+# }
+
+# {
+#     "name": "10 Kinrui",
+#     "serial_numb": "250010",
+#     "ip": "10.88.81.11",
+#     "latitude": -2.879332,
+#     "longitude": 122.172372,
+#     "desc": "Blocker 10 Kinrui",
+#     "angle_start": 0
+# }
+
+
+### 2. Get All DBlockers
+GET {{host}}/api/dblockers
+Authorization: Bearer {{token}}
+
+### 3. Get DBlocker by ID
+GET {{host}}/api/dblockers/13
+Authorization: Bearer {{token}}
+
+### 4. Update DBlocker by ID
+PUT {{host}}/api/dblockers/13
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "angle_start": -10
+}
+
+
+### 5. Delete DBlocker by ID
+DELETE {{host}}/api/dblockers/5
+Authorization: Bearer {{token}}
+
+
+### 6. Update DBlocker Config
+PUT {{host}}/api/dblockers/config
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 12,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+### 7. Turn Off All DBlocker Config
+GET {{host}}/api/dblockers/config/off/3
+Authorization: Bearer {{token}}
+
+### 7b. Turn Off All DBlocker Config B
+GET {{host}}/api/dblockers/config/off/1
+Authorization: Bearer {{token}}
+
+### 8. Save Preset Config (store preset ON state for a dblocker)
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 15,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+### 9. Apply Preset ON (publish saved preset config to device via MQTT)
+GET {{host}}/api/dblockers/config/preset/6
+Authorization: Bearer {{token}}
