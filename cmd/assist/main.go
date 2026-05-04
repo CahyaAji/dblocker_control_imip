@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	internalmqtt "dblocker_control/internal/infrastructure/mqtt"
 )
 
 type DBlockerConfig struct {
@@ -59,6 +61,20 @@ func main() {
 	}
 
 	log.Println("dblocker-assist started, polling schedules...")
+
+	// Connect to MQTT for drone detection live feed publishing.
+	mqttBroker := os.Getenv("MQTT_BROKER")
+	if mqttBroker == "" {
+		mqttBroker = "tcp://mosquitto:1883"
+	}
+	mqttUser := os.Getenv("MQTT_USERNAME")
+	mqttPass := os.Getenv("MQTT_PASSWORD")
+	if mqc, err := internalmqtt.NewWithAuth(mqttBroker, "dblocker-assist-detector", mqttUser, mqttPass); err != nil {
+		log.Printf("warn: MQTT connect failed, drone detection live feed disabled: %v", err)
+	} else {
+		mqttDetectPublisher = mqc
+		log.Printf("MQTT connected for drone detection live feed (%s)", mqttBroker)
+	}
 
 	// Start drone detector connections from database
 	startDetectorsFromDB()
