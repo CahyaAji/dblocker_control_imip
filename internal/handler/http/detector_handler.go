@@ -3,7 +3,6 @@ package http
 import (
 	"dblocker_control/internal/infrastructure/database/repository"
 	"dblocker_control/internal/models"
-	"math"
 	"net/http"
 	"strconv"
 	"sync"
@@ -161,20 +160,6 @@ func (h *DetectorHandler) CreateDroneEvent(c *gin.Context) {
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Dedup: skip if latest event for same target has heading within 5°
-	if input.TargetName != "" {
-		if last, err := h.EventRepo.FindLatestByTarget(input.TargetName); err == nil {
-			diff := math.Abs(float64(input.Heading - last.Heading))
-			if diff > 180 {
-				diff = 360 - diff
-			}
-			if diff < 5 {
-				c.JSON(http.StatusOK, gin.H{"data": last, "deduplicated": true})
-				return
-			}
-		}
 	}
 
 	if err := h.EventRepo.Create(&input); err != nil {

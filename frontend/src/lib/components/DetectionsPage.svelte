@@ -8,6 +8,11 @@
     } from "../store/authStore";
     import { API_BASE } from "../utils/api";
     import LoginPage from "./LoginPage.svelte";
+    import {
+        subscribeBridge,
+        unsubscribeBridge,
+        bridgeStore,
+    } from "../store/bridgeStore";
 
     interface DroneDetector {
         id: number;
@@ -39,6 +44,17 @@
         created_at: string;
     }
 
+    interface LiveEntry {
+        time: string;
+        detector: string;
+        targetName: string;
+        heading: number;
+        distance: number;
+        confidence: number;
+        frequency: number;
+        saved: boolean;
+    }
+
     let detectors = $state<DroneDetector[]>([]);
     let events = $state<DroneEvent[]>([]);
     let loading = $state(false);
@@ -46,6 +62,11 @@
     let darkMode = $state(true);
     let autoRefresh = $state(true);
     let refreshTimer: ReturnType<typeof setInterval> | undefined;
+
+    // Live detection console feed (from MQTT via SSE)
+    let liveLog = $state<LiveEntry[]>([]);
+    let livePaused = $state(false);
+    let lastLivePayload = $state("");
 
     // Date filter – defaults to today
     let filterDate = $state(new Date().toISOString().slice(0, 10));
@@ -84,6 +105,7 @@
 
     onMount(() => {
         loadTheme();
+        subscribeBridge();
         if ($authStore.token) {
             verifyToken().then((valid) => {
                 if (valid) {
@@ -93,7 +115,36 @@
                 }
             });
         }
-        return () => stopAutoRefresh();
+        return () => {
+            unsubscribeBridge();
+            stopAutoRefresh();
+        };
+    });
+
+    // Watch MQTT detections/live topic for new detection events.
+    $effect(() => {
+        const payload = $bridgeStore["detections/live"];
+        if (!payload || payload === lastLivePayload) return;
+        lastLivePayload = payload;
+        if (livePaused) return;
+        try {
+            const d = JSON.parse(payload);
+            const entry: LiveEntry = {
+                time: new Date(
+                    d.timestamp ? d.timestamp : Date.now(),
+                ).toLocaleTimeString("en-GB"),
+                detector: String(d.detector ?? ""),
+                targetName: String(d.target_name || d.unique_id || "Unknown"),
+                heading: Number(d.heading ?? 0),
+                distance: Number(d.distance ?? 0),
+                confidence: Number(d.confidence ?? 0),
+                frequency: Number(d.frequency ?? 0),
+                saved: Boolean(d.saved),
+            };
+            liveLog = [entry, ...liveLog].slice(0, 10);
+        } catch {
+            /* ignore malformed */
+        }
     });
 
     function startAutoRefresh() {
@@ -331,6 +382,52 @@
                 </table>
             </div>
         {/if}
+
+        <!-- Live detection console feed -->
+        <div class="live-feed">
+            <div class="live-feed-header">
+                <span class="live-dot" class:live-dot-active={liveLog.length > 0}></span>
+                <span class="live-title">Live Detection Feed</span>
+                <span class="live-count">{liveLog.length} received</span>
+                <button
+                    class="btn-live-action"
+                    onclick={() => (livePaused = !livePaused)}
+                >{livePaused ? "Resume" : "Pause"}</button>
+                <button
+                    class="btn-live-action"
+                    onclick={() => (liveLog = [])}
+                >Clear</button>
+            </div>
+            <div class="live-console">
+                {#if liveLog.length === 0}
+                    <div class="live-empty">Waiting for detections...</div>
+                {:else}
+                    {#each liveLog as entry}
+                        <div
+                            class="live-line"
+                            class:live-saved={entry.saved}
+                            class:live-dup={!entry.saved}
+                        >
+                            <span class="live-ts">[{entry.time}]</span>
+                            <span
+                                class="live-badge"
+                                class:badge-saved={entry.saved}
+                                class:badge-dup={!entry.saved}
+                            >{entry.saved ? "SAVED" : "DUP"}</span>
+                            <span class="live-det">{entry.detector}</span>
+                            <span class="live-sep">|</span>
+                            <span class="live-target">{entry.targetName}</span>
+                            <span class="live-sep">|</span>
+                            <span class="live-meta"
+                                >{entry.heading}° &nbsp;{entry.distance}m &nbsp;{entry.confidence}% &nbsp;{entry.frequency.toFixed(
+                                    0,
+                                )}kHz</span
+                            >
+                        </div>
+                    {/each}
+                {/if}
+            </div>
+        </div>
     </div>
 {/if}
 
@@ -339,7 +436,6 @@
         max-width: 1100px;
         margin: 0 auto;
         padding: 24px 16px;
-        min-height: 100vh;
     }
 
     .access-denied {
@@ -522,7 +618,9 @@
         background: var(--card-bg);
         border: 1px solid var(--separator);
         border-radius: 14px;
-        overflow-x: auto;
+        overflow: auto;
+        max-height: 420px;
+        margin-bottom: 14px;
     }
 
     .filter-bar {
@@ -646,5 +744,149 @@
         background: color-mix(in srgb, var(--accent-cyan) 12%, var(--card-bg));
         padding: 1px 6px;
         border-radius: 4px;
+    }
+
+    /* Live detection console feed */
+    .live-feed {
+        margin-bottom: 14px;
+        background: var(--card-bg);
+        border: 1px solid var(--separator);
+        border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .live-feed-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--separator);
+        background: color-mix(in srgb, var(--card-bg) 80%, transparent);
+    }
+
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #555;
+        flex-shrink: 0;
+        transition: background 0.3s;
+    }
+
+    .live-dot.live-dot-active {
+        background: #22c55e;
+        box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+        animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+
+    .live-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    .live-count {
+        font-size: 11px;
+        color: var(--text-secondary);
+        flex: 1;
+    }
+
+    .btn-live-action {
+        padding: 3px 10px;
+        border: 1px solid var(--separator);
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .btn-live-action:hover {
+        color: var(--text-primary);
+        border-color: var(--text-secondary);
+    }
+
+    .live-console {
+        font-family: monospace;
+        font-size: 11px;
+        max-height: 200px;
+        overflow-y: auto;
+        padding: 6px 0;
+    }
+
+    .live-empty {
+        padding: 16px 14px;
+        color: var(--text-secondary);
+        font-style: italic;
+        font-size: 11px;
+    }
+
+    .live-line {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        padding: 2px 14px;
+        line-height: 1.6;
+    }
+
+    .live-line.live-saved {
+        background: color-mix(in srgb, #22c55e 4%, transparent);
+    }
+
+    .live-line.live-dup {
+        opacity: 0.65;
+    }
+
+    .live-ts {
+        color: var(--text-secondary);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .live-badge {
+        font-size: 9px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 4px;
+        flex-shrink: 0;
+        letter-spacing: 0.5px;
+    }
+
+    .badge-saved {
+        background: color-mix(in srgb, #22c55e 20%, transparent);
+        color: #22c55e;
+    }
+
+    .badge-dup {
+        background: color-mix(in srgb, var(--text-secondary) 15%, transparent);
+        color: var(--text-secondary);
+    }
+
+    .live-det {
+        color: var(--accent-cyan);
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .live-sep {
+        color: var(--separator);
+        flex-shrink: 0;
+    }
+
+    .live-target {
+        color: var(--text-primary);
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .live-meta {
+        color: var(--text-secondary);
+        white-space: nowrap;
     }
 </style>
