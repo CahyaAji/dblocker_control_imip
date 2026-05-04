@@ -30,6 +30,29 @@ var (
 	holdTimers   = map[string]*time.Timer{}
 )
 
+// mqttDetectPublisher is set by main() after MQTT connects.
+// If nil, MQTT publishing is skipped.
+var mqttDetectPublisher mqttPublisher
+
+// mqttPublisher is a minimal interface so we don't import the full MQTT package here.
+type mqttPublisher interface {
+	Publish(topic string, qos byte, retained bool, payload any) error
+}
+
+// detectionDedupWindow is how long the same drone+heading is suppressed from DB writes.
+const detectionDedupWindow = 20 * time.Second
+
+type detectionCacheEntry struct {
+	targetName  string
+	heading     int
+	lastSavedAt time.Time
+}
+
+var (
+	detectionCacheMu sync.Mutex
+	detectionCache   = map[string]detectionCacheEntry{} // key: uniqueID
+)
+
 // MonitoringData represents a heartbeat/status frame from the drone detector.
 type MonitoringData struct {
 	DeviceID         int32
@@ -289,6 +312,26 @@ func parseDroneData(label string, data []byte) {
 
 	// LOGIC MARK: Detection processing starts here. No frequency filter is applied.
 
+	// Deduplication: skip DB write only when name AND heading are unchanged
+	// AND the last saved write for this drone was less than detectionDedupWindow ago.
+	// If the same drone is seen continuously for >= detectionDedupWindow, the next
+	// detection is saved again (and the window restarts).
+	now := time.Now()
+	detectionCacheMu.Lock()
+	entry, exists := detectionCache[d.UniqueID]
+	shouldSave := !exists ||
+		entry.targetName != d.TargetName ||
+		entry.heading != int(d.DirectionAngle) ||
+		now.Sub(entry.lastSavedAt) >= detectionDedupWindow
+	if shouldSave {
+		detectionCache[d.UniqueID] = detectionCacheEntry{
+			targetName:  d.TargetName,
+			heading:     int(d.DirectionAngle),
+			lastSavedAt: now,
+		}
+	}
+	detectionCacheMu.Unlock()
+
 	log.Printf("[%s] === TARGET IDENTIFIED: %s ===", label, d.TargetName)
 	log.Printf("[%s]   Unique ID:    %s", label, d.UniqueID)
 	log.Printf("[%s]   Target ID:    %d", label, d.TargetID)
@@ -303,8 +346,16 @@ func parseDroneData(label string, data []byte) {
 	log.Printf("[%s]   Confidence:   %d%%  Timestamp: %d",
 		label, d.Confidence, d.Timestamp)
 
+	// Always publish to MQTT for live feed on detections page.
+	go publishDetectionToMQTT(label, d, shouldSave)
+
 	// LOGIC MARK: This line triggers the write to the database (via API POST)
-	go postDroneEvent(label, d)
+	if shouldSave {
+		go postDroneEvent(label, d)
+	} else {
+		log.Printf("[%s] dedup: skipping DB write for %s (same name+heading within %s)",
+			label, d.UniqueID, detectionDedupWindow)
+	}
 
 	// LOGIC MARK: This triggers automatic blocker activation based on detection
 	// go autoActivateBlockers(label, d)
@@ -324,6 +375,36 @@ func statusLabel(ok bool, good, bad string) string {
 		return good
 	}
 	return bad
+}
+
+// publishDetectionToMQTT publishes every drone detection to MQTT topic detections/live.
+// saved=true means this detection was also written to the database; saved=false means it was deduped.
+func publishDetectionToMQTT(label string, d DroneData, saved bool) {
+	if mqttDetectPublisher == nil {
+		return
+	}
+	payload := map[string]any{
+		"detector":    label,
+		"unique_id":   d.UniqueID,
+		"target_name": d.TargetName,
+		"drone_lat":   float64(d.DroneLatitude),
+		"drone_lng":   float64(d.DroneLongitude),
+		"drone_alt":   int(d.DroneAltitude),
+		"heading":     int(d.DirectionAngle),
+		"distance":    int(d.Distance),
+		"speed":       d.FlightSpeed,
+		"frequency":   d.Frequency,
+		"confidence":  int(d.Confidence),
+		"saved":       saved,
+		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return
+	}
+	if err := mqttDetectPublisher.Publish("detections/live", 0, false, body); err != nil {
+		log.Printf("[%s] failed to publish detection to MQTT: %v", label, err)
+	}
 }
 
 // postDroneEvent sends a detected drone event to the backend API.
@@ -368,7 +449,7 @@ func postDroneEvent(label string, d DroneData) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		log.Printf("[%s] drone event POST returned status %d", label, resp.StatusCode)
 	}
 }

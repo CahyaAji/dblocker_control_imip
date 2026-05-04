@@ -68,11 +68,24 @@ func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *Curren
 			if err := br.ResubscribeTrackedTopics(); err != nil {
 				log.Printf("Failed to resubscribe bridge topics after MQTT reconnect: %v", err)
 			}
+			// Always resubscribe the drone detection live feed topic.
+			if err := client.Subscribe("detections/live", 0, func(msg mqtt.Message) {
+				br.broadcast(msg)
+			}); err != nil {
+				log.Printf("warn: failed to resubscribe detections/live after reconnect: %v", err)
+			}
 		})
 	}
 
 	if err := br.RefreshTopics(); err != nil {
 		return nil, err
+	}
+
+	// Subscribe to drone detection live feed (published by the assist process).
+	if err := client.Subscribe("detections/live", 0, func(msg mqtt.Message) {
+		br.broadcast(msg)
+	}); err != nil {
+		log.Printf("warn: failed to subscribe to detections/live: %v", err)
 	}
 
 	br.resetRetainedStatus()

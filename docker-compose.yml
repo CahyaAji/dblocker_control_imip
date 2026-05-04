@@ -35,10 +35,14 @@ services:
     restart: unless-stopped
     depends_on:
       - app
+      - mosquitto
     environment:
       API_KEY: ${API_KEY:-}
       BACKEND_URL: http://dblocker-app:8080
       DRONE_DETECTORS: ${DRONE_DETECTORS:-}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-mysecretmqttpassword}
 
   mosquitto:
     container_name: dblocker-mqtt
