@@ -21,6 +21,12 @@
     let resizeObserver: ResizeObserver;
     let debounceTimer: ReturnType<typeof setTimeout>;
 
+    // Detector sector wedge overlay markers and state
+    let detectorOverlayMarkers = new Map<number, maplibregl.Marker>();
+    let activeSectors = new Map<number, Set<number>>();
+    let sectorTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    let lastDetectionPayload = "";
+
     const SOURCE_ID = "dblockers-source";
     const LAYER_GLOW_ID = "dblockers-glow";
     const LAYER_CORE_ID = "dblockers-core";
@@ -58,6 +64,37 @@
     $effect(() => {
         if (map && $detectorStore.length > 0)
             updateDetectorMarkers($detectorStore);
+    });
+
+    // Watch detections/live MQTT topic: light up the matching sector for 20s.
+    $effect(() => {
+        if (!map) return;
+        const payload = $bridgeStore["detections/live"];
+        if (!payload || payload === lastDetectionPayload) return;
+        lastDetectionPayload = payload;
+        try {
+            const d = JSON.parse(payload) as { detector?: string; heading?: number };
+            const heading = ((Number(d.heading ?? 0) % 360) + 360) % 360;
+            const detectorLabel = String(d.detector ?? "");
+            const match = detectorLabel.match(/^detector-(\d+)-/);
+            if (!match) return;
+            const detectorId = Number(match[1]);
+            const sectorIdx = Math.floor(heading / 90);
+            const timerKey = `${detectorId}-${sectorIdx}`;
+
+            const existing = sectorTimers.get(timerKey);
+            if (existing) clearTimeout(existing);
+
+            if (!activeSectors.has(detectorId)) activeSectors.set(detectorId, new Set());
+            activeSectors.get(detectorId)!.add(sectorIdx);
+            updateSectorVisibility(detectorId);
+
+            sectorTimers.set(timerKey, setTimeout(() => {
+                activeSectors.get(detectorId)?.delete(sectorIdx);
+                sectorTimers.delete(timerKey);
+                updateSectorVisibility(detectorId);
+            }, 20_000));
+        } catch { /* ignore */ }
     });
 
     $effect(() => {
@@ -237,6 +274,70 @@
         const source = map.getSource(DET_SOURCE_ID) as maplibregl.GeoJSONSource;
         if (source) {
             source.setData(buildDetectorGeoJSON(data));
+        }
+        updateDetectorOverlays(data);
+    }
+
+    function createDetectorSectorElement(): HTMLElement {
+        const el = document.createElement("div");
+        el.className = "det-sector-overlay";
+
+        // Quarter-circle pie slices using arc-approximated polygons.
+        // Each polygon starts at 50%,50% (detector center), sweeps 90° along the arc.
+        // Heading convention: 0°=North=up, 90°=East=right (clockwise).
+        const clipPaths = [
+            // Sector 0: N→E (0–90°)
+            "polygon(50% 50%, 50% 0%, 59% 1%, 67% 3%, 75% 7%, 82% 12%, 88% 18%, 93% 25%, 97% 33%, 99% 41%, 100% 50%)",
+            // Sector 1: E→S (90–180°)
+            "polygon(50% 50%, 100% 50%, 99% 59%, 97% 67%, 93% 75%, 88% 82%, 82% 88%, 75% 93%, 67% 97%, 59% 99%, 50% 100%)",
+            // Sector 2: S→W (180–270°)
+            "polygon(50% 50%, 50% 100%, 41% 99%, 33% 97%, 25% 93%, 18% 88%, 12% 82%, 7% 75%, 3% 67%, 1% 59%, 0% 50%)",
+            // Sector 3: W→N (270–360°)
+            "polygon(50% 50%, 0% 50%, 1% 41%, 3% 33%, 7% 25%, 12% 18%, 18% 12%, 25% 7%, 33% 3%, 41% 1%, 50% 0%)",
+        ];
+
+        for (let i = 0; i < 4; i++) {
+            const sector = document.createElement("div");
+            sector.className = "det-sector";
+            sector.setAttribute("data-sector", String(i));
+            sector.style.clipPath = clipPaths[i];
+            el.appendChild(sector);
+        }
+        return el;
+    }
+
+    function updateSectorVisibility(detectorId: number) {
+        const marker = detectorOverlayMarkers.get(detectorId);
+        if (!marker) return;
+        const el = marker.getElement();
+        const active = activeSectors.get(detectorId) ?? new Set<number>();
+        for (let i = 0; i < 4; i++) {
+            const sectorEl = el.querySelector(`[data-sector="${i}"]`);
+            if (sectorEl) sectorEl.classList.toggle("active", active.has(i));
+        }
+    }
+
+    function updateDetectorOverlays(data: DroneDetector[]) {
+        if (!map) return;
+        const incomingIds = new Set(data.map((d) => d.id));
+        for (const [id, marker] of detectorOverlayMarkers) {
+            if (!incomingIds.has(id)) {
+                marker.remove();
+                detectorOverlayMarkers.delete(id);
+            }
+        }
+        for (const det of data) {
+            if (det.latitude == null || det.longitude == null) continue;
+            if (!detectorOverlayMarkers.has(det.id)) {
+                const el = createDetectorSectorElement();
+                const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+                    .setLngLat([det.longitude, det.latitude])
+                    .addTo(map!);
+                detectorOverlayMarkers.set(det.id, marker);
+                updateSectorVisibility(det.id);
+            } else {
+                detectorOverlayMarkers.get(det.id)?.setLngLat([det.longitude, det.latitude]);
+            }
         }
     }
 
@@ -423,6 +524,10 @@
             overlayMarkers.forEach((m) => m.remove());
             overlayMarkers.clear();
             previousConfigMap.clear();
+            detectorOverlayMarkers.forEach((m) => m.remove());
+            detectorOverlayMarkers.clear();
+            sectorTimers.forEach((t) => clearTimeout(t));
+            sectorTimers.clear();
 
             if (map) {
                 map.remove();
@@ -556,5 +661,36 @@
             transform: translate(-50%, -50%) rotate(var(--angle)) scale(1);
             opacity: 0;
         }
+    }
+
+    /* Detector sector wedges */
+    .map-layout :global(.det-sector-overlay) {
+        width: 0;
+        height: 0;
+        position: relative;
+    }
+
+    .map-layout :global(.det-sector) {
+        position: absolute;
+        width: 200px;
+        height: 200px;
+        top: 0;
+        left: 0;
+        transform: translate(-50%, -50%);
+        background: transparent;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.4s ease;
+    }
+
+    .map-layout :global(.det-sector.active) {
+        background: rgba(255, 50, 50, 0.5);
+        opacity: 1;
+        animation: det-sector-pulse 1.2s ease-in-out infinite alternate;
+    }
+
+    @keyframes det-sector-pulse {
+        from { opacity: 0.55; }
+        to   { opacity: 0.95; }
     }
 </style>
