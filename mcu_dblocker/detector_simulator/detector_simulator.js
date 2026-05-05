@@ -38,7 +38,7 @@ const DEVICE_ALT = 50;
 // Simulated drone parameters
 const DRONE_UID = "SIM-DRONE-001";
 const DRONE_NAME = "DJI Mavic Sim";
-const DRONE_HEADING = 45; // Bearing from detector to drone (degrees, 0–359)
+const DRONE_HEADING = 300; // Bearing from detector to drone (degrees, 0–359)
 const DRONE_BASE_LAT = -2.81;
 const DRONE_BASE_LNG = 122.14;
 const DRONE_ALT = 120;

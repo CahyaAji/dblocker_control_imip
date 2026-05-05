@@ -38,14 +38,14 @@ GET {{host}}/api/detectors
 Authorization: Bearer {{token}}
 
 ### 13. Update Detector
-PUT {{host}}/api/detectors/2
+PUT {{host}}/api/detectors/1
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name": "Detector 2",
-    "latitude": -2.809000,
-    "longitude": 122.148000,
+    "name": "Detector 1",
+    "latitude": -2.81968,
+    "longitude": 122.15309,
     "host": "10.88.81.16",
     "port": 5555
 }
