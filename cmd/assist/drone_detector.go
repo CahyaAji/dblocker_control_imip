@@ -358,7 +358,7 @@ func parseDroneData(label string, data []byte) {
 	}
 
 	// LOGIC MARK: This triggers automatic blocker activation based on detection
-	// go autoActivateBlockers(label, d)
+	go autoActivateBlockers(label, d)
 }
 
 func trimNull(s string) string {
