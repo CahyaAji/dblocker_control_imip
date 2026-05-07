@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
-	"io"
 	"log"
 	"os/exec"
+	"time"
 )
 
 // FrameProcessor is an optional hook to process a JPEG frame before it is sent
@@ -32,87 +32,120 @@ func (c *Camera) StartMJPEGStream(ctx context.Context) <-chan []byte {
 			rtspURL = c.RTSPMainStreamURL()
 		}
 
-		cmd := exec.CommandContext(ctx, "ffmpeg",
-			"-loglevel", "warning",
-			"-rtsp_transport", "tcp",
-			"-i", rtspURL,
-			"-f", "image2pipe",
-			"-vcodec", "mjpeg",
-			"-q:v", "5",
-			"-r", "15",
-			"pipe:1",
+		const (
+			retryDelay    = 3 * time.Second
+			maxRetryDelay = 30 * time.Second
 		)
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			log.Printf("[stream %s] ffmpeg pipe error: %v", c.Host, err)
-			return
-		}
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			log.Printf("[stream %s] ffmpeg stderr pipe error: %v", c.Host, err)
-			return
-		}
-		if err := cmd.Start(); err != nil {
-			log.Printf("[stream %s] ffmpeg start error: %v", c.Host, err)
-			return
-		}
-		// Forward ffmpeg warnings/errors to the server log.
-		go func() {
-			buf := make([]byte, 4096)
-			for {
-				n, err := stderr.Read(buf)
-				if n > 0 {
-					log.Printf("[ffmpeg %s] %s", c.Host, string(buf[:n]))
-				}
-				if err != nil {
-					if err != io.EOF {
-						log.Printf("[stream %s] ffmpeg stderr read: %v", c.Host, err)
-					}
-					return
-				}
-			}
-		}()
-		defer cmd.Wait()
+		delay := retryDelay
 
-		// Scan the raw byte stream for complete JPEG frames.
-		// JPEG starts with 0xFF 0xD8 and ends with 0xFF 0xD9.
-		buf := make([]byte, 0, 512*1024)
-		tmp := make([]byte, 65536)
 		for {
-			n, err := stdout.Read(tmp)
-			if n > 0 {
-				buf = append(buf, tmp[:n]...)
-				for {
-					start := bytes.Index(buf, []byte{0xFF, 0xD8})
-					if start < 0 {
-						buf = buf[:0]
-						break
-					}
-					end := bytes.Index(buf[start+2:], []byte{0xFF, 0xD9})
-					if end < 0 {
-						// incomplete frame — keep buf from start, wait for more data
-						buf = buf[start:]
-						break
-					}
-					end = start + 2 + end + 2
-					frame := make([]byte, end-start)
-					copy(frame, buf[start:end])
-					buf = buf[end:]
-					select {
-					case frames <- frame:
-					case <-ctx.Done():
-						return
-					default:
-						// drop frame if consumer is too slow
-					}
+			if ctx.Err() != nil {
+				return
+			}
+
+			if err := c.runFFmpeg(ctx, rtspURL, frames); err != nil && ctx.Err() == nil {
+				log.Printf("[stream %s] ffmpeg exited: %v — retrying in %s", c.Host, err, delay)
+			} else if ctx.Err() == nil {
+				log.Printf("[stream %s] ffmpeg exited — retrying in %s", c.Host, delay)
+			}
+
+			if ctx.Err() != nil {
+				return
+			}
+
+			select {
+			case <-time.After(delay):
+				// double the delay each failure, capped at maxRetryDelay
+				delay *= 2
+				if delay > maxRetryDelay {
+					delay = maxRetryDelay
 				}
+			case <-ctx.Done():
+				return
+			}
+
+			// reset delay on a successful reconnect (camera was reachable)
+			delay = retryDelay
+		}
+	}()
+	return frames
+}
+
+// runFFmpeg launches one FFmpeg process and forwards frames to the channel.
+// Returns when FFmpeg exits or ctx is cancelled.
+func (c *Camera) runFFmpeg(ctx context.Context, rtspURL string, frames chan<- []byte) error {
+	cmd := exec.CommandContext(ctx, "ffmpeg",
+		"-loglevel", "warning",
+		"-rtsp_transport", "tcp",
+		"-i", rtspURL,
+		"-f", "image2pipe",
+		"-vcodec", "mjpeg",
+		"-q:v", "5",
+		"-r", "15",
+		"pipe:1",
+	)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	go func() {
+		buf := make([]byte, 4096)
+		for {
+			n, err := stderr.Read(buf)
+			if n > 0 {
+				log.Printf("[ffmpeg %s] %s", c.Host, string(buf[:n]))
 			}
 			if err != nil {
 				return
 			}
 		}
 	}()
-	return frames
+
+	// Scan the raw byte stream for complete JPEG frames.
+	// JPEG starts with 0xFF 0xD8 and ends with 0xFF 0xD9.
+	buf := make([]byte, 0, 512*1024)
+	tmp := make([]byte, 65536)
+	for {
+		n, err := stdout.Read(tmp)
+		if n > 0 {
+			buf = append(buf, tmp[:n]...)
+			for {
+				start := bytes.Index(buf, []byte{0xFF, 0xD8})
+				if start < 0 {
+					buf = buf[:0]
+					break
+				}
+				end := bytes.Index(buf[start+2:], []byte{0xFF, 0xD9})
+				if end < 0 {
+					buf = buf[start:]
+					break
+				}
+				end = start + 2 + end + 2
+				frame := make([]byte, end-start)
+				copy(frame, buf[start:end])
+				buf = buf[end:]
+				select {
+				case frames <- frame:
+				case <-ctx.Done():
+					cmd.Wait()
+					return nil
+				default:
+					// drop frame if consumer is too slow
+				}
+			}
+		}
+		if err != nil {
+			break
+		}
+	}
+	return cmd.Wait()
 }
 
 // ProcessFrames wraps a frame channel with a FrameProcessor.
