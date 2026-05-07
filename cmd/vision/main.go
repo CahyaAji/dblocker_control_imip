@@ -28,8 +28,9 @@ func main() {
 		cam.GET("/devices/:id/rtsp", h.GetRTSPURLs)
 		cam.GET("/devices/:id/stream/:cam", h.StreamMJPEG)
 		cam.GET("/devices/:id/snapshot", h.Snapshot)
-		cam.POST("/devices/:id/ptz", h.PTZControl)
-		cam.POST("/devices/:id/ptz/stop", h.PTZStop)
+		// cam.POST("/devices/:id/ptz", h.PTZControl)
+		// cam.POST("/devices/:id/ptz/stop", h.PTZStop)
+		cam.POST("/devices/:id/ptz/absolute", h.PanTiltAbsolute)
 		cam.POST("/devices/:id/ptz/preset/:preset", h.PTZGotoPreset)
 	}
 

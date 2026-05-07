@@ -134,6 +134,47 @@ func (h *DeviceHandler) Snapshot(c *gin.Context) {
 	c.Data(http.StatusOK, ct, data)
 }
 
+// POST /devices/:id/ptz/absolute
+// Body: { "azimuth": 0-3600, "elevation": -900..900, "absolute_zoom": 0-1000 }
+// Moves the pan/tilt camera to an absolute position via ISAPI.
+func (h *DeviceHandler) PanTiltAbsolute(c *gin.Context) {
+	d := h.findDevice(c.Param("id"))
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+
+	var req PTZAbsoluteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+
+	status, upstreamCode, err := d.PTZAbsolute(req)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	upstreamBody := gin.H{}
+	if status != nil && (status.RequestURL != "" || status.StatusCode != "" || status.StatusString != "" || status.SubStatusCode != "") {
+		upstreamBody = gin.H{
+			"request_url":     status.RequestURL,
+			"status_code":     status.StatusCode,
+			"status_string":   status.StatusString,
+			"sub_status_code": status.SubStatusCode,
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"ok":              upstreamCode >= 200 && upstreamCode < 300,
+		"device_id":       d.ID,
+		"target_ip":       d.PanTiltCtrl.Host,
+		"upstream_status": upstreamCode,
+		"upstream_body":   upstreamBody,
+	})
+}
+
 // POST /devices/:id/ptz
 // Body: { "pan": 0, "tilt": 0, "zoom": 0 }
 // Pan/tilt routed to Normal camera, zoom routed to Thermal camera.

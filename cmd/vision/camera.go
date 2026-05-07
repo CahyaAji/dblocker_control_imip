@@ -217,6 +217,74 @@ func (c *Camera) ptzGotoPreset(presetID int) error {
 	return nil
 }
 
+// ---- Absolute PTZ ----
+
+// PTZAbsoluteRequest holds absolute position values.
+// Azimuth: 0–3600 (tenths of a degree, 0 = north/home).
+// Elevation: -900..900 (tenths of a degree).
+// AbsoluteZoom: 0..1000.
+type PTZAbsoluteRequest struct {
+	Azimuth      int     `json:"azimuth"`
+	Elevation    int     `json:"elevation"`
+	AbsoluteZoom float64 `json:"absolute_zoom"`
+}
+
+type ptzAbsoluteSet struct {
+	Azimuth      int     `xml:"azimuth"`
+	Elevation    int     `xml:"elevation"`
+	AbsoluteZoom float64 `xml:"absoluteZoom"`
+}
+
+type ptzAbsoluteXML struct {
+	XMLName      xml.Name       `xml:"PTZData"`
+	AbsoluteHigh ptzAbsoluteSet `xml:"AbsoluteHigh"`
+}
+
+// hikResponseStatus holds the standard Hikvision ResponseStatus XML body.
+type hikResponseStatus struct {
+	XMLName       xml.Name `xml:"ResponseStatus"`
+	RequestURL    string   `xml:"requestURL"`
+	StatusCode    string   `xml:"statusCode"`
+	StatusString  string   `xml:"statusString"`
+	SubStatusCode string   `xml:"subStatusCode"`
+}
+
+// ptzAbsolute sends an absolute position command to this camera.
+func (c *Camera) ptzAbsolute(azimuth, elevation int, absoluteZoom float64) (*hikResponseStatus, int, error) {
+	data := ptzAbsoluteXML{
+		AbsoluteHigh: ptzAbsoluteSet{
+			Azimuth:      azimuth,
+			Elevation:    elevation,
+			AbsoluteZoom: absoluteZoom,
+		},
+	}
+	xmlBody, err := xml.Marshal(data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("marshal ptz absolute: %w", err)
+	}
+	body := append([]byte(xml.Header), xmlBody...)
+	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/absolute", c.Channel)
+	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytesReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("ptz absolute: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("ptz absolute read response: %w", err)
+	}
+	var status hikResponseStatus
+	if xmlErr := xml.Unmarshal(respBody, &status); xmlErr == nil {
+		return &status, resp.StatusCode, nil
+	}
+	return nil, resp.StatusCode, nil
+}
+
+// PTZAbsolute moves the PanTiltCtrl camera to an absolute position.
+func (d *Device) PTZAbsolute(req PTZAbsoluteRequest) (*hikResponseStatus, int, error) {
+	return d.PanTiltCtrl.ptzAbsolute(req.Azimuth, req.Elevation, req.AbsoluteZoom)
+}
+
 // ---- helpers ----
 
 func abs(x int) int {
