@@ -44,6 +44,32 @@ services:
       MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-mysecretmqttpassword}
 
+  vision:
+    container_name: dblocker-vision
+    build:
+      context: .
+      dockerfile: Dockerfile.vision
+    restart: unless-stopped
+    environment:
+      APP_PORT: ${VISION_PORT:-8090}
+      GIN_MODE: ${GIN_MODE:-debug}
+      CAMERA_USERNAME: ${CAMERA_USERNAME:-admin}
+      CAMERA_PASSWORD: ${CAMERA_PASSWORD:-}
+      DEVICE_1_NAME: ${DEVICE_1_NAME:-Device 1}
+      DEVICE_1_NORMAL_HOST: ${DEVICE_1_NORMAL_HOST:-}
+      DEVICE_1_THERMAL_HOST: ${DEVICE_1_THERMAL_HOST:-}
+      DEVICE_1_THERMAL_MAIN_STREAM: ${DEVICE_1_THERMAL_MAIN_STREAM:-false}
+      DEVICE_1_PANTILT_HOST: ${DEVICE_1_PANTILT_HOST:-}
+      DEVICE_1_ZOOM_HOST: ${DEVICE_1_ZOOM_HOST:-}
+      DEVICE_2_NAME: ${DEVICE_2_NAME:-Device 2}
+      DEVICE_2_NORMAL_HOST: ${DEVICE_2_NORMAL_HOST:-}
+      DEVICE_2_THERMAL_HOST: ${DEVICE_2_THERMAL_HOST:-}
+      DEVICE_2_THERMAL_MAIN_STREAM: ${DEVICE_2_THERMAL_MAIN_STREAM:-false}
+      DEVICE_2_PANTILT_HOST: ${DEVICE_2_PANTILT_HOST:-}
+      DEVICE_2_ZOOM_HOST: ${DEVICE_2_ZOOM_HOST:-}
+    ports:
+      - "${VISION_PORT:-8090}:${VISION_PORT:-8090}"
+
   mosquitto:
     container_name: dblocker-mqtt
     image: eclipse-mosquitto:2
