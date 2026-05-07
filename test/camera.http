@@ -81,5 +81,15 @@ Content-Type: application/json
 ### PTZ - stop all movement
 POST {{host}}/cam/devices/{{deviceId}}/ptz/stop
 
+### PTZ - absolute position (azimuth 0-3600 tenths-of-degree, elevation -900..900, absolute_zoom 0-1000)
+POST {{host}}/cam/devices/{{deviceId}}/ptz/absolute
+Content-Type: application/json
+
+{
+    "azimuth": 900,
+    "elevation": 0,
+    "absolute_zoom": 100
+}
+
 ### PTZ - go to preset 1
 POST {{host}}/cam/devices/{{deviceId}}/ptz/preset/1
