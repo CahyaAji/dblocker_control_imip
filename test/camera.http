@@ -1,0 +1,85 @@
+@host = http://localhost:8090
+@deviceId = 1
+
+### List all devices
+GET {{host}}/cam/devices
+
+### Get RTSP URLs for a device
+GET {{host}}/cam/devices/{{deviceId}}/rtsp
+
+### Snapshot - normal camera
+GET {{host}}/cam/devices/{{deviceId}}/snapshot?cam=normal
+
+### Snapshot - thermal camera
+GET {{host}}/cam/devices/{{deviceId}}/snapshot?cam=thermal
+
+# NOTE: Streaming endpoints return multipart/x-mixed-replace (MJPEG).
+# They do not work in .http files — open them directly in a browser or VLC instead:
+#   http://localhost:8090/cam/devices/1/stream/normal
+#   http://localhost:8090/cam/devices/1/stream/thermal
+
+### PTZ - move right (pan positive)
+POST {{host}}/cam/devices/{{deviceId}}/ptz
+Content-Type: application/json
+
+{
+    "pan": 50,
+    "tilt": 0,
+    "zoom": 0
+}
+
+### PTZ - move left (pan negative)
+POST {{host}}/cam/devices/{{deviceId}}/ptz
+Content-Type: application/json
+
+{
+    "pan": -50,
+    "tilt": 0,
+    "zoom": 0
+}
+
+### PTZ - tilt up
+POST {{host}}/cam/devices/{{deviceId}}/ptz
+Content-Type: application/json
+
+{
+    "pan": 0,
+    "tilt": 50,
+    "zoom": 0
+}
+
+### PTZ - tilt down
+POST {{host}}/cam/devices/{{deviceId}}/ptz
+Content-Type: application/json
+
+{
+    "pan": 0,
+    "tilt": -50,
+    "zoom": 0
+}
+
+### PTZ - zoom in
+POST {{host}}/cam/devices/{{deviceId}}/ptz
+Content-Type: application/json
+
+{
+    "pan": 0,
+    "tilt": 0,
+    "zoom": 50
+}
+
+### PTZ - zoom out
+POST {{host}}/cam/devices/{{deviceId}}/ptz
+Content-Type: application/json
+
+{
+    "pan": 0,
+    "tilt": 0,
+    "zoom": -50
+}
+
+### PTZ - stop all movement
+POST {{host}}/cam/devices/{{deviceId}}/ptz/stop
+
+### PTZ - go to preset 1
+POST {{host}}/cam/devices/{{deviceId}}/ptz/preset/1
