@@ -7,6 +7,8 @@ import (
 	"dblocker_control/internal/middleware"
 	"dblocker_control/internal/service"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -95,6 +97,20 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.GET("/detectors/settings", detectorHandler.GetDetectionSettings)
 	api.PUT("/detectors/settings", detectorHandler.UpdateDetectionSettings)
 
+	// Vision proxy: forward /cam/* to the vision server
+	visionURL := os.Getenv("VISION_URL")
+	if visionURL == "" {
+		visionURL = "http://dblocker-vision:8090"
+	}
+	visionTarget, err := url.Parse(visionURL)
+	if err != nil {
+		panic("invalid VISION_URL: " + err.Error())
+	}
+	visionProxy := httputil.NewSingleHostReverseProxy(visionTarget)
+	r.Any("/cam/*path", func(c *gin.Context) {
+		visionProxy.ServeHTTP(c.Writer, c.Request)
+	})
+
 	//! make sure frontend is built first: npm run build (inside frontend/)
 
 	frontendDist := resolveFrontendDistPath()
@@ -108,6 +124,9 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 		})
 		r.GET("/detections", func(ctx *gin.Context) {
 			ctx.File(filepath.Join(frontendDist, "detections.html"))
+		})
+		r.GET("/camera", func(ctx *gin.Context) {
+			ctx.File(filepath.Join(frontendDist, "camera.html"))
 		})
 	} else {
 		r.GET("/dashboard", func(ctx *gin.Context) {
