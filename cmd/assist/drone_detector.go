@@ -99,6 +99,7 @@ type DroneData struct {
 func StartDroneDetector(label, host string, port int, lat, lng float64) {
 	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	log.Printf("[%s] detector location: %.6f, %.6f (from database)", label, lat, lng)
+	registerDetectorLocation(label, lat, lng)
 	backoff := 5 * time.Second
 	const maxBackoff = 60 * time.Second
 
@@ -359,6 +360,9 @@ func parseDroneData(label string, data []byte) {
 
 	// LOGIC MARK: This triggers automatic blocker activation based on detection
 	go autoActivateBlockers(label, d)
+
+	// LOGIC MARK: This rotates configured cameras toward the detected drone
+	go autoTrackCamera(label, d)
 }
 
 func trimNull(s string) string {

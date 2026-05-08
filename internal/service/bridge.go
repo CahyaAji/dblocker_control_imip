@@ -74,6 +74,12 @@ func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *Curren
 			}); err != nil {
 				log.Printf("warn: failed to resubscribe detections/live after reconnect: %v", err)
 			}
+			// Resubscribe camera heading topics.
+			if err := client.Subscribe("cam/+/heading", 0, func(msg mqtt.Message) {
+				br.broadcast(msg)
+			}); err != nil {
+				log.Printf("warn: failed to resubscribe cam/+/heading after reconnect: %v", err)
+			}
 		})
 	}
 
@@ -86,6 +92,12 @@ func NewBridgeService(client mqtt.Client, reader DBlockerReader, monitor *Curren
 		br.broadcast(msg)
 	}); err != nil {
 		log.Printf("warn: failed to subscribe to detections/live: %v", err)
+	}
+	// Subscribe to camera heading updates (published by assist after each PTZ command).
+	if err := client.Subscribe("cam/+/heading", 0, func(msg mqtt.Message) {
+		br.broadcast(msg)
+	}); err != nil {
+		log.Printf("warn: failed to subscribe to cam/+/heading: %v", err)
 	}
 
 	br.resetRetainedStatus()

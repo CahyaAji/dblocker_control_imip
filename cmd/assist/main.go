@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	internalmqtt "dblocker_control/internal/infrastructure/mqtt"
@@ -59,6 +60,32 @@ func main() {
 	if apiKey == "" {
 		log.Fatal("API_KEY is required")
 	}
+
+	// Camera tracking setup
+	visionURL = os.Getenv("VISION_URL")
+	if visionURL == "" {
+		visionURL = "http://dblocker-vision:8090"
+	}
+	if v := os.Getenv("DRONE_RANGE_FALLBACK"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0 {
+			droneRangeFallbackM = f
+		}
+	}
+	if v := os.Getenv("CAMERA_HEIGHT"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
+			cameraHeightM = f
+		}
+	}
+	for i := 1; i <= 8; i++ {
+		key := fmt.Sprintf("DEVICE_%d_NORTH_OFFSET", i)
+		if v := os.Getenv(key); v != "" {
+			if f, err := strconv.ParseFloat(v, 64); err == nil {
+				northOffsets[i] = f
+			}
+		}
+	}
+	log.Printf("camera tracking: vision=%s range_fallback=%.0fm camera_height=%.0fm",
+		visionURL, droneRangeFallbackM, cameraHeightM)
 
 	log.Println("dblocker-assist started, polling schedules...")
 

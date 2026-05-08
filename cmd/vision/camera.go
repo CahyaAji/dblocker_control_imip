@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/icholy/digest"
@@ -56,6 +57,10 @@ type Device struct {
 	// recorder state — managed by recorder.go
 	recorderMu sync.Mutex
 	recorder   *activeRecording
+
+	// LastAzimuth is the last absolute azimuth (ISAPI tenths-of-degrees) sent
+	// to this device. Stored atomically so ListDevices can read it safely.
+	LastAzimuth atomic.Int32
 }
 
 // RTSPMainStreamURL returns the main-stream RTSP URL for the camera.
@@ -275,6 +280,34 @@ func (c *Camera) PTZContinuous(pan, tilt int) (*hikResponseStatus, int, error) {
 		return &status, resp.StatusCode, nil
 	}
 	return nil, resp.StatusCode, nil
+}
+
+// PTZGetAzimuth reads the current pan/tilt azimuth from the camera via ISAPI
+// GET /ISAPI/PTZCtrl/channels/{ch}/status.
+// Returns the azimuth in ISAPI units (tenths of degrees, 0–3599) or an error.
+func (c *Camera) PTZGetAzimuth() (int, error) {
+	type ptzStatusHigh struct {
+		Azimuth int `xml:"azimuth"`
+	}
+	type ptzStatus struct {
+		XMLName      xml.Name      `xml:"PTZStatus"`
+		AbsoluteHigh ptzStatusHigh `xml:"AbsoluteHigh"`
+	}
+	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/status", c.Channel)
+	resp, err := c.isapiDo(http.MethodGet, path, "", nil)
+	if err != nil {
+		return 0, fmt.Errorf("ptz status: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("ptz status read: %w", err)
+	}
+	var s ptzStatus
+	if err := xml.Unmarshal(body, &s); err != nil {
+		return 0, fmt.Errorf("ptz status parse: %w", err)
+	}
+	return s.AbsoluteHigh.Azimuth, nil
 }
 
 // PTZZoomContinuous sends a continuous zoom command.

@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 
+	internalmqtt "dblocker_control/internal/infrastructure/mqtt"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +19,17 @@ func main() {
 
 	appPort := getEnv("APP_PORT", "8090")
 	recordDir := getEnv("RECORD_DIR", "/recordings")
+
+	// Connect to MQTT for camera heading publishing (best-effort).
+	mqttBroker := getEnv("MQTT_BROKER", "tcp://mosquitto:1883")
+	mqttUser := os.Getenv("MQTT_USERNAME")
+	mqttPass := os.Getenv("MQTT_PASSWORD")
+	if mqc, err := internalmqtt.NewWithAuth(mqttBroker, "dblocker-vision", mqttUser, mqttPass); err != nil {
+		log.Printf("warn: MQTT connect failed, camera heading publishing disabled: %v", err)
+	} else {
+		mqttPub = mqc
+		log.Printf("Vision MQTT connected (%s)", mqttBroker)
+	}
 
 	r := gin.Default()
 	r.Use(cors.Default())

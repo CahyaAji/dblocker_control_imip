@@ -1,13 +1,20 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
+	internalmqtt "dblocker_control/internal/infrastructure/mqtt"
+
 	"github.com/gin-gonic/gin"
 )
+
+// mqttPub is set by main() after MQTT connects. If nil, publishing is skipped.
+var mqttPub internalmqtt.Client
 
 type DeviceHandler struct {
 	devices   []*Device
@@ -36,26 +43,28 @@ func (h *DeviceHandler) findDevice(idStr string) *Device {
 // Returns the list of devices (without credentials).
 func (h *DeviceHandler) ListDevices(c *gin.Context) {
 	type deviceInfo struct {
-		ID        int     `json:"id"`
-		Name      string  `json:"name"`
-		Lat       float64 `json:"lat"`
-		Lng       float64 `json:"lng"`
-		NormalIP  string  `json:"normal_ip"`
-		ThermalIP string  `json:"thermal_ip"`
-		PanTiltIP string  `json:"pantilt_ip"`
-		ZoomIP    string  `json:"zoom_ip"`
+		ID          int     `json:"id"`
+		Name        string  `json:"name"`
+		Lat         float64 `json:"lat"`
+		Lng         float64 `json:"lng"`
+		LastAzimuth int     `json:"last_azimuth"`
+		NormalIP    string  `json:"normal_ip"`
+		ThermalIP   string  `json:"thermal_ip"`
+		PanTiltIP   string  `json:"pantilt_ip"`
+		ZoomIP      string  `json:"zoom_ip"`
 	}
 	result := make([]deviceInfo, 0, len(h.devices))
 	for _, d := range h.devices {
 		result = append(result, deviceInfo{
-			ID:        d.ID,
-			Name:      d.Name,
-			Lat:       d.Lat,
-			Lng:       d.Lng,
-			NormalIP:  d.NormalCam.Host,
-			ThermalIP: d.ThermalCam.Host,
-			PanTiltIP: d.PanTiltCtrl.Host,
-			ZoomIP:    d.ZoomCtrl.Host,
+			ID:          d.ID,
+			Name:        d.Name,
+			Lat:         d.Lat,
+			Lng:         d.Lng,
+			LastAzimuth: int(d.LastAzimuth.Load()),
+			NormalIP:    d.NormalCam.Host,
+			ThermalIP:   d.ThermalCam.Host,
+			PanTiltIP:   d.PanTiltCtrl.Host,
+			ZoomIP:      d.ZoomCtrl.Host,
 		})
 	}
 	c.JSON(http.StatusOK, gin.H{"data": result})
@@ -166,6 +175,13 @@ func (h *DeviceHandler) PanTiltAbsolute(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
+	d.LastAzimuth.Store(int32(req.Azimuth))
+	// Publish heading update so the map marker stays in sync.
+	if mqttPub != nil {
+		if msg, err := json.Marshal(map[string]int{"azimuth": req.Azimuth}); err == nil {
+			_ = mqttPub.Publish(fmt.Sprintf("cam/%d/heading", d.ID), 0, true, string(msg))
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"device_id":     d.ID,
@@ -235,6 +251,25 @@ func (h *DeviceHandler) PanTiltContinuous(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
+	}
+
+	// When movement stops (pan=0 tilt=0), read the real azimuth from ISAPI
+	// after a short settle delay and publish it to MQTT.
+	if req.Pan == 0 && req.Tilt == 0 && mqttPub != nil {
+		devID := d.ID
+		cam := d.PanTiltCtrl
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			azimuth, err := cam.PTZGetAzimuth()
+			if err != nil {
+				log.Printf("warn: PTZGetAzimuth device %d: %v", devID, err)
+				return
+			}
+			d.LastAzimuth.Store(int32(azimuth))
+			if msg, err := json.Marshal(map[string]int{"azimuth": azimuth}); err == nil {
+				_ = mqttPub.Publish(fmt.Sprintf("cam/%d/heading", devID), 0, true, string(msg))
+			}
+		}()
 	}
 
 	c.JSON(http.StatusOK, gin.H{

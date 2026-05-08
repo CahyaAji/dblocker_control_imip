@@ -18,6 +18,10 @@
     let overlayMarkers = new Map<number, maplibregl.Marker>();
     let previousConfigMap = new Map<number, string>();
 
+    // Camera heading needle overlays
+    let cameraHeadingMarkers = new Map<number, maplibregl.Marker>();
+    let cameraPositions: Record<number, [number, number]> = {}; // id → [lng, lat]
+
     let resizeObserver: ResizeObserver;
     let debounceTimer: ReturnType<typeof setTimeout>;
 
@@ -50,6 +54,7 @@
         name: string;
         lat: number;
         lng: number;
+        last_azimuth: number;
     }
     let cameraDevices = $state<CameraDevice[]>([]);
 
@@ -83,6 +88,22 @@
     $effect(() => {
         if (map && cameraDevices.length > 0)
             updateCameraMarkers(cameraDevices);
+    });
+
+    // Watch MQTT topics cam/{id}/heading published by assist after each PTZ command.
+    $effect(() => {
+        if (!map) return;
+        const bridge = $bridgeStore;
+        for (const [topic, payload] of Object.entries(bridge)) {
+            const m = topic.match(/^cam\/(\d+)\/heading$/);
+            if (!m) continue;
+            const id = Number(m[1]);
+            try {
+                const data = JSON.parse(payload) as { azimuth?: number };
+                const degrees = ((data.azimuth ?? 0) / 10 + 360) % 360;
+                updateCameraHeadingOverlay(id, degrees);
+            } catch { /* ignore */ }
+        }
     });
 
     // Watch detections/live MQTT topic: light up the matching sector for 20s.
@@ -359,8 +380,44 @@
 
     function updateCameraMarkers(data: CameraDevice[]) {
         if (!map) return;
+        for (const d of data) {
+            if (d.lat !== 0 || d.lng !== 0) cameraPositions[d.id] = [d.lng, d.lat];
+        }
         const source = map.getSource(CAM_SOURCE_ID) as maplibregl.GeoJSONSource;
         if (source) source.setData(buildCameraGeoJSON(data));
+        // Initialize or reposition heading overlays.
+        for (const d of data) {
+            if (d.lat === 0 && d.lng === 0) continue;
+            const degrees = ((d.last_azimuth / 10) + 360) % 360;
+            updateCameraHeadingOverlay(d.id, degrees);
+        }
+        // Reposition heading overlays if they already exist.
+        for (const [id, marker] of cameraHeadingMarkers) {
+            const pos = cameraPositions[id];
+            if (pos) marker.setLngLat(pos);
+        }
+    }
+
+    function updateCameraHeadingOverlay(id: number, headingDeg: number) {
+        if (!map) return;
+        const pos = cameraPositions[id];
+        if (!pos) return;
+        if (!cameraHeadingMarkers.has(id)) {
+            const el = document.createElement("div");
+            el.className = "cam-heading-overlay";
+            const stripe = document.createElement("div");
+            stripe.className = "cam-heading-stripe";
+            el.appendChild(stripe);
+            const marker = new maplibregl.Marker({ element: el, anchor: "center" })
+                .setLngLat(pos)
+                .addTo(map!);
+            cameraHeadingMarkers.set(id, marker);
+        } else {
+            cameraHeadingMarkers.get(id)!.setLngLat(pos);
+        }
+        const stripe = cameraHeadingMarkers.get(id)!.getElement()
+            .querySelector<HTMLElement>(".cam-heading-stripe");
+        if (stripe) stripe.style.transform = `rotate(${headingDeg}deg)`;
     }
 
     async function fetchCameraDevices() {
@@ -655,6 +712,8 @@
             detectorOverlayMarkers.clear();
             sectorTimers.forEach((t) => clearTimeout(t));
             sectorTimers.clear();
+            cameraHeadingMarkers.forEach((m) => m.remove());
+            cameraHeadingMarkers.clear();
 
             if (map) {
                 map.remove();
@@ -819,5 +878,26 @@
     @keyframes det-sector-pulse {
         from { opacity: 0.55; }
         to   { opacity: 0.95; }
+    }
+
+    /* Camera heading needle */
+    .map-layout :global(.cam-heading-overlay) {
+        width: 0;
+        height: 0;
+        position: relative;
+        pointer-events: none;
+    }
+
+    .map-layout :global(.cam-heading-stripe) {
+        position: absolute;
+        width: 3px;
+        height: 20px;
+        top: -20px;
+        left: -1.5px;
+        transform-origin: 50% 100%;
+        transform: rotate(0deg);
+        background: linear-gradient(to top, rgba(255,255,255,0.95), rgba(255,255,255,0.1));
+        border-radius: 2px 2px 0 0;
+        pointer-events: none;
     }
 </style>
