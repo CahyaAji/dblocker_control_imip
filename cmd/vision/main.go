@@ -56,6 +56,8 @@ func main() {
 //	DEVICE_1_THERMAL_MAIN_STREAM=true   (optional, use main stream for thermal — default false)
 //	DEVICE_1_PANTILT_HOST=10.88.5.100   (pan & tilt ISAPI control)
 //	DEVICE_1_ZOOM_HOST=10.88.5.101      (zoom ISAPI control)
+//	DEVICE_1_LAT=10.1234                (optional, map latitude)
+//	DEVICE_1_LNG=123.4567               (optional, map longitude)
 //	DEVICE_1_PORT=80                    (optional, default 80)
 //	DEVICE_1_RTSP_PORT=554              (optional, default 554)
 //	DEVICE_1_CHANNEL=1                  (optional, default 1)
@@ -109,14 +111,16 @@ func loadDevicesFromEnv() []*Device {
 		dev := &Device{
 			ID:          i,
 			Name:        getEnv(prefix+"NAME", "Device "+strconv.Itoa(i)),
+			Lat:         envFloat(prefix+"LAT", 0),
+			Lng:         envFloat(prefix+"LNG", 0),
 			NormalCam:   mkCam(normalHost, false),
 			ThermalCam:  mkCam(thermalHost, thermalMainStream),
 			PanTiltCtrl: mkCam(panTiltHost, false),
 			ZoomCtrl:    mkCam(zoomHost, false),
 		}
 		devices = append(devices, dev)
-		log.Printf("Loaded device %d: %s (normal=%s thermal=%s pantilt=%s zoom=%s)",
-			dev.ID, dev.Name, normalHost, thermalHost, panTiltHost, zoomHost)
+		log.Printf("Loaded device %d: %s (normal=%s thermal=%s pantilt=%s zoom=%s lat=%.4f lng=%.4f)",
+			dev.ID, dev.Name, normalHost, thermalHost, panTiltHost, zoomHost, dev.Lat, dev.Lng)
 	}
 	return devices
 }
@@ -138,4 +142,16 @@ func envInt(key string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func envFloat(key string, fallback float64) float64 {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return fallback
+	}
+	return f
 }

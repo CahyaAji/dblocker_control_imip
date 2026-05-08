@@ -36,18 +36,22 @@ func (h *DeviceHandler) findDevice(idStr string) *Device {
 // Returns the list of devices (without credentials).
 func (h *DeviceHandler) ListDevices(c *gin.Context) {
 	type deviceInfo struct {
-		ID        int    `json:"id"`
-		Name      string `json:"name"`
-		NormalIP  string `json:"normal_ip"`
-		ThermalIP string `json:"thermal_ip"`
-		PanTiltIP string `json:"pantilt_ip"`
-		ZoomIP    string `json:"zoom_ip"`
+		ID        int     `json:"id"`
+		Name      string  `json:"name"`
+		Lat       float64 `json:"lat"`
+		Lng       float64 `json:"lng"`
+		NormalIP  string  `json:"normal_ip"`
+		ThermalIP string  `json:"thermal_ip"`
+		PanTiltIP string  `json:"pantilt_ip"`
+		ZoomIP    string  `json:"zoom_ip"`
 	}
 	result := make([]deviceInfo, 0, len(h.devices))
 	for _, d := range h.devices {
 		result = append(result, deviceInfo{
 			ID:        d.ID,
 			Name:      d.Name,
+			Lat:       d.Lat,
+			Lng:       d.Lng,
 			NormalIP:  d.NormalCam.Host,
 			ThermalIP: d.ThermalCam.Host,
 			PanTiltIP: d.PanTiltCtrl.Host,

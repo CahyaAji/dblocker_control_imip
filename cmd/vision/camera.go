@@ -44,8 +44,10 @@ func (c *Camera) GetBroadcaster() *StreamBroadcaster {
 //   - PanTiltCtrl: ISAPI target for pan & tilt commands
 //   - ZoomCtrl:    ISAPI target for zoom commands
 type Device struct {
-	ID          int    `json:"id"`
-	Name        string `json:"name"`
+	ID          int     `json:"id"`
+	Name        string  `json:"name"`
+	Lat         float64 `json:"lat"` // physical mount latitude  (0 = not set)
+	Lng         float64 `json:"lng"` // physical mount longitude (0 = not set)
 	NormalCam   *Camera
 	ThermalCam  *Camera
 	PanTiltCtrl *Camera

@@ -39,6 +39,20 @@
     const DET_LAYER_CORE_ID = "detectors-core";
     const DET_LAYER_LABEL_ID = "detectors-label";
 
+    const CAM_SOURCE_ID = "cameras-source";
+    const CAM_LAYER_GLOW_ID = "cameras-glow";
+    const CAM_LAYER_BORDER_ID = "cameras-border";
+    const CAM_LAYER_CORE_ID = "cameras-core";
+    const CAM_LAYER_LABEL_ID = "cameras-label";
+
+    interface CameraDevice {
+        id: number;
+        name: string;
+        lat: number;
+        lng: number;
+    }
+    let cameraDevices = $state<CameraDevice[]>([]);
+
     const MAP_STYLES = {
         normal: "https://api.maptiler.com/maps/openstreetmap/style.json?key=aUOEn1bA48mz3xc3pL4N",
         hybrid: "https://api.maptiler.com/maps/hybrid/style.json?key=aUOEn1bA48mz3xc3pL4N",
@@ -64,6 +78,11 @@
     $effect(() => {
         if (map && $detectorStore.length > 0)
             updateDetectorMarkers($detectorStore);
+    });
+
+    $effect(() => {
+        if (map && cameraDevices.length > 0)
+            updateCameraMarkers(cameraDevices);
     });
 
     // Watch detections/live MQTT topic: light up the matching sector for 20s.
@@ -104,9 +123,11 @@
             map.once("style.load", () => {
                 addSourceAndLayers();
                 addDetectorSourceAndLayers();
+                addCameraSourceAndLayers();
                 if ($dblockerStore.length > 0) updateMarkers($dblockerStore);
                 if ($detectorStore.length > 0)
                     updateDetectorMarkers($detectorStore);
+                if (cameraDevices.length > 0) updateCameraMarkers(cameraDevices);
             });
         }
     });
@@ -245,6 +266,110 @@
                 "text-halo-width": 1.5,
             },
         });
+    }
+
+    function addCameraSourceAndLayers() {
+        if (!map || map.getSource(CAM_SOURCE_ID)) return;
+
+        map.addSource(CAM_SOURCE_ID, {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+        });
+
+        // Outer glow — blue tint
+        map.addLayer({
+            id: CAM_LAYER_GLOW_ID,
+            type: "circle",
+            source: CAM_SOURCE_ID,
+            paint: {
+                "circle-radius": 14,
+                "circle-color": "rgba(96, 165, 250, 0.20)",
+                "circle-blur": 0.5,
+            },
+        });
+
+        // White border ring
+        map.addLayer({
+            id: CAM_LAYER_BORDER_ID,
+            type: "circle",
+            source: CAM_SOURCE_ID,
+            paint: {
+                "circle-radius": 10,
+                "circle-color": "rgba(255, 255, 255, 0.95)",
+            },
+        });
+
+        // Blue core dot
+        map.addLayer({
+            id: CAM_LAYER_CORE_ID,
+            type: "circle",
+            source: CAM_SOURCE_ID,
+            paint: {
+                "circle-radius": 8,
+                "circle-color": "#3b82f6",
+            },
+        });
+
+        // Label
+        map.addLayer({
+            id: CAM_LAYER_LABEL_ID,
+            type: "symbol",
+            source: CAM_SOURCE_ID,
+            layout: {
+                "text-field": ["get", "name"],
+                "text-size": 12,
+                "text-anchor": "top",
+                "text-offset": [0, 1.4],
+                "text-font": ["Open Sans Bold", "Arial Unicode MS Bold"],
+            },
+            paint: {
+                "text-color": "#93c5fd",
+                "text-halo-color": "rgba(0, 0, 0, 0.8)",
+                "text-halo-width": 1.5,
+            },
+        });
+
+        // Navigate to /camera on click
+        map.on("click", CAM_LAYER_CORE_ID, () => {
+            window.location.href = "/camera";
+        });
+        map.on("mouseenter", CAM_LAYER_CORE_ID, () => {
+            if (map) map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", CAM_LAYER_CORE_ID, () => {
+            if (map) map.getCanvas().style.cursor = "";
+        });
+    }
+
+    function buildCameraGeoJSON(data: CameraDevice[]): GeoJSON.FeatureCollection {
+        return {
+            type: "FeatureCollection",
+            features: data
+                .filter((d) => d.lat !== 0 && d.lng !== 0)
+                .map((d) => ({
+                    type: "Feature" as const,
+                    geometry: {
+                        type: "Point" as const,
+                        coordinates: [d.lng, d.lat],
+                    },
+                    properties: { id: d.id, name: d.name },
+                })),
+        };
+    }
+
+    function updateCameraMarkers(data: CameraDevice[]) {
+        if (!map) return;
+        const source = map.getSource(CAM_SOURCE_ID) as maplibregl.GeoJSONSource;
+        if (source) source.setData(buildCameraGeoJSON(data));
+    }
+
+    async function fetchCameraDevices() {
+        try {
+            const res = await fetch("/cam/devices");
+            if (!res.ok) return;
+            const json = await res.json();
+            cameraDevices = (json.data ?? []) as CameraDevice[];
+        } catch { /* ignore — vision server may not be available */ }
     }
 
     function buildDetectorGeoJSON(
@@ -509,7 +634,9 @@
         map.on("load", () => {
             addSourceAndLayers();
             addDetectorSourceAndLayers();
+            addCameraSourceAndLayers();
             fetchDetectors();
+            fetchCameraDevices();
 
             console.log(
                 "DBlocker Store on map load: " + JSON.stringify($dblockerStore),

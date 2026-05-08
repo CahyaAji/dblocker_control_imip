@@ -6,6 +6,8 @@
   interface DeviceInfo {
     id: number;
     name: string;
+    lat: number;
+    lng: number;
     normal_ip: string;
     thermal_ip: string;
     pantilt_ip: string;
