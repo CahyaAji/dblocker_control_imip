@@ -18,78 +18,54 @@ GET {{host}}/cam/devices/{{deviceId}}/snapshot?cam=thermal
 #   http://localhost:8090/cam/devices/1/stream/normal
 #   http://localhost:8090/cam/devices/1/stream/thermal
 
-### PTZ - move right (pan positive)
-POST {{host}}/cam/devices/{{deviceId}}/ptz
-Content-Type: application/json
-
-{
-    "pan": 50,
-    "tilt": 0,
-    "zoom": 0
-}
-
-### PTZ - move left (pan negative)
-POST {{host}}/cam/devices/{{deviceId}}/ptz
-Content-Type: application/json
-
-{
-    "pan": -50,
-    "tilt": 0,
-    "zoom": 0
-}
-
-### PTZ - tilt up
-POST {{host}}/cam/devices/{{deviceId}}/ptz
-Content-Type: application/json
-
-{
-    "pan": 0,
-    "tilt": 50,
-    "zoom": 0
-}
-
-### PTZ - tilt down
-POST {{host}}/cam/devices/{{deviceId}}/ptz
-Content-Type: application/json
-
-{
-    "pan": 0,
-    "tilt": -50,
-    "zoom": 0
-}
-
-### PTZ - zoom in
-POST {{host}}/cam/devices/{{deviceId}}/ptz
-Content-Type: application/json
-
-{
-    "pan": 0,
-    "tilt": 0,
-    "zoom": 50
-}
-
-### PTZ - zoom out
-POST {{host}}/cam/devices/{{deviceId}}/ptz
-Content-Type: application/json
-
-{
-    "pan": 0,
-    "tilt": 0,
-    "zoom": -50
-}
-
-### PTZ - stop all movement
-POST {{host}}/cam/devices/{{deviceId}}/ptz/stop
 
 ### PTZ - absolute position (azimuth 0-3600 tenths-of-degree, elevation -900..900, absolute_zoom 0-1000)
-POST {{host}}/cam/devices/{{deviceId}}/ptz/absolute
+POST {{host}}/cam/devices/{{deviceId}}/pantilt
 Content-Type: application/json
 
 {
-    "azimuth": 900,
-    "elevation": 0,
-    "absolute_zoom": 100
+    "azimuth": 100,
+    "elevation": 0
 }
 
-### PTZ - go to preset 1
-POST {{host}}/cam/devices/{{deviceId}}/ptz/preset/1
+### PTZ - zoom
+POST {{host}}/cam/devices/{{deviceId}}/zoom
+Content-Type: application/json
+
+{
+    "zoom": 0
+}
+
+### PTZ - continuous pan/tilt
+POST {{host}}/cam/devices/{{deviceId}}/pantilt/continuous
+Content-Type: application/json
+
+{
+    "pan": 0,
+    "tilt": 10
+}
+
+### PTZ - stop continuous pan/tilt
+POST {{host}}/cam/devices/{{deviceId}}/pantilt/continuous
+Content-Type: application/json
+
+{
+    "pan": 0,
+    "tilt": 0
+}
+
+### PTZ - continuous zoom
+POST {{host}}/cam/devices/{{deviceId}}/zoom/continuous
+Content-Type: application/json
+
+{
+    "zoom": 20
+}
+
+### PTZ - stop continuous zoom
+POST {{host}}/cam/devices/{{deviceId}}/zoom/continuous
+Content-Type: application/json
+
+{
+    "zoom": 0
+}
