@@ -135,7 +135,7 @@ func (h *DeviceHandler) Snapshot(c *gin.Context) {
 }
 
 // POST /devices/:id/ptz/absolute
-// Body: { "azimuth": 0-3600, "elevation": -900..900, "absolute_zoom": 0-1000 }
+// Body: { "azimuth": 0-3600, "elevation": -900..900 }
 // Moves the pan/tilt camera to an absolute position via ISAPI.
 func (h *DeviceHandler) PanTiltAbsolute(c *gin.Context) {
 
