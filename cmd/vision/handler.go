@@ -1,20 +1,21 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type DeviceHandler struct {
-	devices []*Device
+	devices   []*Device
+	recordDir string
 }
 
-func NewDeviceHandler(devices []*Device) *DeviceHandler {
-	return &DeviceHandler{devices: devices}
+func NewDeviceHandler(devices []*Device, recordDir string) *DeviceHandler {
+	return &DeviceHandler{devices: devices, recordDir: recordDir}
 }
 
 // findDevice returns the device with the given id, or nil.
@@ -76,11 +77,9 @@ func (h *DeviceHandler) GetRTSPURLs(c *gin.Context) {
 // Serves a live MJPEG stream over HTTP (cam = normal | thermal).
 // Can be used directly as <img src=".../stream/normal"> in any browser.
 //
-// Future YOLO integration example:
-//
-//	raw := cam.StartMJPEGStream(ctx)
-//	annotated := ProcessFrames(ctx, raw, yoloProcessor)
-//	serveStream(c, annotated)
+// All viewers and any active recorder share a single FFmpeg process via
+// the per-camera StreamBroadcaster. YOLO frame processing (future) will
+// slot in between the broadcaster and the subscribers automatically.
 func (h *DeviceHandler) StreamMJPEG(c *gin.Context) {
 	d := h.findDevice(c.Param("id"))
 	if d == nil {
@@ -92,10 +91,8 @@ func (h *DeviceHandler) StreamMJPEG(c *gin.Context) {
 		cam = d.ThermalCam
 	}
 
-	ctx, cancel := context.WithCancel(c.Request.Context())
-	defer cancel()
-
-	frames := cam.StartMJPEGStream(ctx)
+	subID, frames := cam.GetBroadcaster().Subscribe()
+	defer cam.GetBroadcaster().Unsubscribe(subID)
 
 	const boundary = "mjpegframe"
 	c.Header("Content-Type", "multipart/x-mixed-replace; boundary="+boundary)
@@ -104,12 +101,21 @@ func (h *DeviceHandler) StreamMJPEG(c *gin.Context) {
 	c.Status(http.StatusOK)
 
 	w := c.Writer
-	for frame := range frames {
-		fmt.Fprintf(w, "--%s\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", boundary, len(frame))
-		w.Write(frame)
-		fmt.Fprintf(w, "\r\n")
-		if flusher, ok := w.(http.Flusher); ok {
-			flusher.Flush()
+	reqCtx := c.Request.Context()
+	for {
+		select {
+		case frame, ok := <-frames:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(w, "--%s\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", boundary, len(frame))
+			w.Write(frame)
+			fmt.Fprintf(w, "\r\n")
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		case <-reqCtx.Done():
+			return
 		}
 	}
 }
@@ -269,5 +275,77 @@ func (h *DeviceHandler) ZoomContinuous(c *gin.Context) {
 		"zoom":          req.Zoom,
 		"status":        status.StatusCode,
 		"upstream_code": upstreamCode,
+	})
+}
+
+// ── Recording ─────────────────────────────────────────────────────────────
+
+// POST /devices/:id/record/start
+// Body: { "cam": "normal"|"thermal", "duration": <seconds> }
+// duration is optional; defaults to the server maximum (10 min).
+// Also usable without the UI for programmatic triggering.
+func (h *DeviceHandler) RecordStart(c *gin.Context) {
+	d := h.findDevice(c.Param("id"))
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+	var req struct {
+		Cam      string  `json:"cam"`
+		Duration float64 `json:"duration"` // seconds; 0 = use max
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+	if req.Cam == "" {
+		req.Cam = "normal"
+	}
+	dur := time.Duration(req.Duration * float64(time.Second))
+	if err := d.RecordStart(req.Cam, dur, h.recordDir); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "started", "cam": req.Cam})
+}
+
+// POST /devices/:id/record/stop
+func (h *DeviceHandler) RecordStop(c *gin.Context) {
+	d := h.findDevice(c.Param("id"))
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+	if err := d.RecordStop(); err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "stopped"})
+}
+
+// GET /devices/:id/record/status
+func (h *DeviceHandler) RecordStatus(c *gin.Context) {
+	d := h.findDevice(c.Param("id"))
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+	recording, cam, filename, startedAt := d.RecordStatus()
+	if !recording {
+		c.JSON(http.StatusOK, gin.H{"recording": false})
+		return
+	}
+	elapsed := time.Since(startedAt).Seconds()
+	remaining := maxRecordDuration.Seconds() - elapsed
+	if remaining < 0 {
+		remaining = 0
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"recording":         true,
+		"cam":               cam,
+		"filename":          filename,
+		"started_at":        startedAt.Format(time.RFC3339),
+		"elapsed_seconds":   int(elapsed),
+		"remaining_seconds": int(remaining),
 	})
 }

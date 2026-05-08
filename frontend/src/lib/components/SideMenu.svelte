@@ -19,7 +19,7 @@
         >
         <button
             class:active={activeTab === "settings"}
-            onclick={() => (activeTab = "settings")}>Auto Mode</button
+            onclick={() => (activeTab = "settings")}>Settings</button
         >
 
         <button

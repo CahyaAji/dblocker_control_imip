@@ -23,8 +23,19 @@ type Camera struct {
 	Password      string
 	UseMainStream bool // true = use main stream for MJPEG (thermal cameras often lack sub-stream)
 
-	clientOnce sync.Once
-	client     *http.Client
+	clientOnce      sync.Once
+	client          *http.Client
+	broadcasterOnce sync.Once
+	broadcaster     *StreamBroadcaster
+}
+
+// GetBroadcaster returns the shared StreamBroadcaster for this camera.
+// The broadcaster is created lazily on first call.
+func (c *Camera) GetBroadcaster() *StreamBroadcaster {
+	c.broadcasterOnce.Do(func() {
+		c.broadcaster = newStreamBroadcaster(c)
+	})
+	return c.broadcaster
 }
 
 // Device represents one physical camera mount with 4 separate IPs:
@@ -39,6 +50,10 @@ type Device struct {
 	ThermalCam  *Camera
 	PanTiltCtrl *Camera
 	ZoomCtrl    *Camera
+
+	// recorder state — managed by recorder.go
+	recorderMu sync.Mutex
+	recorder   *activeRecording
 }
 
 // RTSPMainStreamURL returns the main-stream RTSP URL for the camera.

@@ -76,14 +76,111 @@
     focusedSlot = null;
   };
 
-  const handlePTZ = (direction: "up" | "down" | "left" | "right") => {
-    // TODO: implement PTZ control
-    console.log("PTZ:", direction);
+  const PTZ_SPEED = 20;  // -100..100
+  const ZOOM_SPEED = 20; // -100..100
+
+  // Send one continuous pan/tilt command (fire-and-forget).
+  const sendPTZ = (pan: number, tilt: number) => {
+    if (!focusedDevice) return;
+    fetch(`/cam/devices/${focusedDevice.id}/pantilt/continuous`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pan, tilt }),
+    }).catch(() => {});
   };
 
-  const handleZoom = (direction: "in" | "out") => {
-    // TODO: implement zoom control
-    console.log("Zoom:", direction);
+  // Send one continuous zoom command (fire-and-forget).
+  const sendZoom = (zoom: number) => {
+    if (!focusedDevice || focusedView === "thermal") return;
+    fetch(`/cam/devices/${focusedDevice.id}/zoom/continuous`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ zoom }),
+    }).catch(() => {});
+  };
+
+  const directionMap: Record<"up" | "down" | "left" | "right", [number, number]> = {
+    up:    [0,           PTZ_SPEED],
+    down:  [0,          -PTZ_SPEED],
+    left:  [-PTZ_SPEED,  0],
+    right: [PTZ_SPEED,   0],
+  };
+
+  const startPTZ = (direction: "up" | "down" | "left" | "right", e: PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    const [pan, tilt] = directionMap[direction];
+    sendPTZ(pan, tilt);
+  };
+
+  const stopPTZ = () => sendPTZ(0, 0);
+
+  const startZoom = (direction: "in" | "out", e: PointerEvent) => {
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    sendZoom(direction === "in" ? ZOOM_SPEED : -ZOOM_SPEED);
+  };
+
+  const stopZoom = () => sendZoom(0);
+
+  // ── Recording ─────────────────────────────────────────────────────────────
+  interface RecordStatusData {
+    recording: boolean;
+    cam?: string;
+    filename?: string;
+    started_at?: string;
+    elapsed_seconds?: number;
+    remaining_seconds?: number;
+  }
+
+  let recStatus = $state<RecordStatusData>({ recording: false });
+  let recPollTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Poll record status every second while in focused view.
+  $effect(() => {
+    if (focusedSlot !== null && focusedDevice) {
+      pollRecStatus();
+      recPollTimer = setInterval(pollRecStatus, 1000);
+      return () => {
+        if (recPollTimer !== null) {
+          clearInterval(recPollTimer);
+          recPollTimer = null;
+        }
+        recStatus = { recording: false };
+      };
+    }
+  });
+
+  const pollRecStatus = async () => {
+    if (!focusedDevice) return;
+    try {
+      const res = await fetch(`/cam/devices/${focusedDevice.id}/record/status`);
+      if (res.ok) recStatus = await res.json();
+    } catch {}
+  };
+
+  const startRecording = async () => {
+    if (!focusedDevice) return;
+    try {
+      await fetch(`/cam/devices/${focusedDevice.id}/record/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cam: focusedView }),
+      });
+      await pollRecStatus();
+    } catch {}
+  };
+
+  const stopRecording = async () => {
+    if (!focusedDevice) return;
+    try {
+      await fetch(`/cam/devices/${focusedDevice.id}/record/stop`, { method: "POST" });
+      await pollRecStatus();
+    } catch {}
+  };
+
+  const formatSecs = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   };
 </script>
 
@@ -192,13 +289,21 @@
               <span class="label-badge thermal-badge">Thermal</span>
             {/if}
           </div>
+          {#if recStatus.recording}
+            <div class="rec-overlay">
+              <span class="rec-dot"></span>
+              <span class="rec-time">{formatSecs(recStatus.elapsed_seconds ?? 0)}</span>
+            </div>
+          {/if}
         </div>
 
         <!-- Control panel -->
         <aside class="control-panel">
 
           <!-- Back -->
-          <button type="button" class="exit-btn" onclick={exitFocus}>
+          <button type="button" class="exit-btn" onclick={exitFocus}
+            disabled={recStatus.recording}
+            title={recStatus.recording ? "Stop recording first" : ""}>
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Dual View
           </button>
@@ -207,8 +312,12 @@
           <div class="ctrl-section">
             <p class="ctrl-label">View</p>
             <div class="view-toggle">
-              <button type="button" class="view-btn" class:active={focusedView === "normal"} onclick={() => { if (focusedView !== "normal") { streamLoading = true; focusedView = "normal"; } }}>Normal</button>
-              <button type="button" class="view-btn" class:active={focusedView === "thermal"} onclick={() => { if (focusedView !== "thermal") { streamLoading = true; focusedView = "thermal"; } }}>Thermal</button>
+              <button type="button" class="view-btn" class:active={focusedView === "normal"}
+                disabled={recStatus.recording}
+                onclick={() => { if (focusedView !== "normal") { streamLoading = true; focusedView = "normal"; } }}>Normal</button>
+              <button type="button" class="view-btn" class:active={focusedView === "thermal"}
+                disabled={recStatus.recording}
+                onclick={() => { if (focusedView !== "thermal") { streamLoading = true; focusedView = "thermal"; } }}>Thermal</button>
             </div>
           </div>
 
@@ -217,21 +326,37 @@
             <p class="ctrl-label">Move</p>
             <div class="dpad">
               <div class="dpad-row">
-                <button type="button" class="dpad-btn" onclick={() => handlePTZ("up")} aria-label="Tilt up" title="Up">
+                <button type="button" class="dpad-btn"
+                  onpointerdown={(e) => startPTZ("up", e)}
+                  onpointerup={stopPTZ}
+                  onpointercancel={stopPTZ}
+                  aria-label="Tilt up" title="Up">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
                 </button>
               </div>
               <div class="dpad-row">
-                <button type="button" class="dpad-btn" onclick={() => handlePTZ("left")} aria-label="Pan left" title="Left">
+                <button type="button" class="dpad-btn"
+                  onpointerdown={(e) => startPTZ("left", e)}
+                  onpointerup={stopPTZ}
+                  onpointercancel={stopPTZ}
+                  aria-label="Pan left" title="Left">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
                 <div class="dpad-center" aria-hidden="true"></div>
-                <button type="button" class="dpad-btn" onclick={() => handlePTZ("right")} aria-label="Pan right" title="Right">
+                <button type="button" class="dpad-btn"
+                  onpointerdown={(e) => startPTZ("right", e)}
+                  onpointerup={stopPTZ}
+                  onpointercancel={stopPTZ}
+                  aria-label="Pan right" title="Right">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
               </div>
               <div class="dpad-row">
-                <button type="button" class="dpad-btn" onclick={() => handlePTZ("down")} aria-label="Tilt down" title="Down">
+                <button type="button" class="dpad-btn"
+                  onpointerdown={(e) => startPTZ("down", e)}
+                  onpointerup={stopPTZ}
+                  onpointercancel={stopPTZ}
+                  aria-label="Tilt down" title="Down">
                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
               </div>
@@ -242,15 +367,43 @@
           <div class="ctrl-section">
             <p class="ctrl-label">Zoom</p>
             <div class="zoom-row">
-              <button type="button" class="zoom-btn" onclick={() => handleZoom("in")} aria-label="Zoom in">
+              <button type="button" class="zoom-btn"
+                onpointerdown={(e) => startZoom("in", e)}
+                onpointerup={stopZoom}
+                onpointercancel={stopZoom}
+                disabled={focusedView === "thermal"}
+                aria-label="Zoom in">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                 Zoom In
               </button>
-              <button type="button" class="zoom-btn" onclick={() => handleZoom("out")} aria-label="Zoom out">
+              <button type="button" class="zoom-btn"
+                onpointerdown={(e) => startZoom("out", e)}
+                onpointerup={stopZoom}
+                onpointercancel={stopZoom}
+                disabled={focusedView === "thermal"}
+                aria-label="Zoom out">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                 Zoom Out
               </button>
             </div>
+          </div>
+
+          <!-- Record -->
+          <div class="ctrl-section">
+            <p class="ctrl-label">Record</p>
+            {#if recStatus.recording}
+              <div class="rec-info">
+                <span class="rec-elapsed">{formatSecs(recStatus.elapsed_seconds ?? 0)}</span>
+                <span class="rec-remain">−{formatSecs(recStatus.remaining_seconds ?? 0)}</span>
+              </div>
+              <button type="button" class="rec-stop-btn" onclick={stopRecording}>
+                ■ Stop
+              </button>
+            {:else}
+              <button type="button" class="rec-start-btn" onclick={startRecording}>
+                ● Record
+              </button>
+            {/if}
           </div>
 
         </aside>
@@ -717,6 +870,119 @@
 
   .zoom-btn:active {
     transform: scale(0.96);
+  }
+
+  .zoom-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* ── Record UI ───────────────────────────────────────────────────────── */
+  .rec-overlay {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 8px;
+    padding: 4px 10px;
+    pointer-events: none;
+    z-index: 3;
+  }
+
+  .rec-dot {
+    width: 8px;
+    height: 8px;
+    background: #ef4444;
+    border-radius: 50%;
+    flex-shrink: 0;
+    animation: rec-blink 1s ease-in-out infinite;
+  }
+
+  @keyframes rec-blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.15; }
+  }
+
+  .rec-time {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rec-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-variant-numeric: tabular-nums;
+    margin-bottom: 2px;
+  }
+
+  .rec-elapsed {
+    font-size: 13px;
+    font-weight: 700;
+    color: #ef4444;
+  }
+
+  .rec-remain {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .rec-start-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, #ef4444 45%, transparent);
+    background: color-mix(in srgb, #ef4444 10%, var(--bg-elevated) 90%);
+    color: #ef4444;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    letter-spacing: 0.02em;
+  }
+
+  .rec-start-btn:hover {
+    background: color-mix(in srgb, #ef4444 20%, var(--bg-elevated) 80%);
+    border-color: color-mix(in srgb, #ef4444 70%, transparent);
+    transform: scale(1.03);
+  }
+
+  .rec-stop-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, #ef4444 65%, transparent);
+    background: color-mix(in srgb, #ef4444 24%, var(--bg-elevated) 76%);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .rec-stop-btn:hover {
+    background: color-mix(in srgb, #ef4444 36%, var(--bg-elevated) 64%);
+    transform: scale(1.03);
+  }
+
+  /* Disabled states for exit and view buttons */
+  .exit-btn:disabled,
+  .view-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    pointer-events: none;
   }
 
   /* ── Empty state ─────────────────────────────────────────────────────── */

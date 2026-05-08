@@ -16,11 +16,12 @@ func main() {
 	}
 
 	appPort := getEnv("APP_PORT", "8090")
+	recordDir := getEnv("RECORD_DIR", "/recordings")
 
 	r := gin.Default()
 	r.Use(cors.Default())
 
-	h := NewDeviceHandler(devices)
+	h := NewDeviceHandler(devices, recordDir)
 
 	cam := r.Group("/cam")
 	{
@@ -35,6 +36,9 @@ func main() {
 		cam.POST("/devices/:id/zoom", h.ZoomAbsolute)
 		cam.POST("/devices/:id/zoom/continuous", h.ZoomContinuous)
 		// cam.POST("/devices/:id/ptz/preset/:preset", h.PTZGotoPreset)
+		cam.POST("/devices/:id/record/start", h.RecordStart)
+		cam.POST("/devices/:id/record/stop", h.RecordStop)
+		cam.GET("/devices/:id/record/status", h.RecordStatus)
 	}
 
 	log.Printf("Vision server starting on :%s", appPort)
