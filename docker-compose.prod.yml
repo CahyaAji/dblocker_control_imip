@@ -68,6 +68,9 @@ services:
       DEVICE_2_THERMAL_MAIN_STREAM: ${DEVICE_2_THERMAL_MAIN_STREAM:-false}
       DEVICE_2_PANTILT_HOST: ${DEVICE_2_PANTILT_HOST}
       DEVICE_2_ZOOM_HOST: ${DEVICE_2_ZOOM_HOST}
+      RECORD_DIR: /recordings
+    volumes:
+      - ${RECORD_DIR_HOST:-./recordings}:/recordings
     ports:
       - "${VISION_PORT:-8090}:${VISION_PORT:-8090}"
 

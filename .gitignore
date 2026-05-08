@@ -29,3 +29,4 @@ mosquitto.db
 mosquitto.log
 mosquitto/config/passwordfile
 other/
+recordings/
