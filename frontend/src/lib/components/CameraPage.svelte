@@ -18,6 +18,7 @@
   let devices = $state<DeviceInfo[]>([]);
   let focusedSlot = $state<number | null>(null);
   let focusedView = $state<ViewType>("normal");
+  let streamLoading = $state(false);
   let loading = $state(false);
   let error = $state<string | null>(null);
 
@@ -68,6 +69,7 @@
   const openFocus = (slot: number) => {
     focusedSlot = slot;
     focusedView = "normal";
+    streamLoading = true;
   };
 
   const exitFocus = () => {
@@ -171,7 +173,18 @@
 
         <!-- Stream -->
         <div class="focused-stream-wrap">
-          <img src={streamUrl(focusedDevice.id, focusedView)} alt="{focusedDevice.name} {focusedView} stream" class="stream-img" />
+          <img
+            src={streamUrl(focusedDevice.id, focusedView)}
+            alt="{focusedDevice.name} {focusedView} stream"
+            class="stream-img"
+            onload={() => (streamLoading = false)}
+            onerror={() => (streamLoading = false)}
+          />
+          {#if streamLoading}
+            <div class="stream-loading-overlay">
+              <div class="stream-spinner"></div>
+            </div>
+          {/if}
           <div class="focused-badge">
             {#if focusedView === "normal"}
               <span class="label-badge normal-badge">Normal</span>
@@ -194,8 +207,8 @@
           <div class="ctrl-section">
             <p class="ctrl-label">View</p>
             <div class="view-toggle">
-              <button type="button" class="view-btn" class:active={focusedView === "normal"} onclick={() => (focusedView = "normal")}>Normal</button>
-              <button type="button" class="view-btn" class:active={focusedView === "thermal"} onclick={() => (focusedView = "thermal")}>Thermal</button>
+              <button type="button" class="view-btn" class:active={focusedView === "normal"} onclick={() => { if (focusedView !== "normal") { streamLoading = true; focusedView = "normal"; } }}>Normal</button>
+              <button type="button" class="view-btn" class:active={focusedView === "thermal"} onclick={() => { if (focusedView !== "thermal") { streamLoading = true; focusedView = "thermal"; } }}>Thermal</button>
             </div>
           </div>
 
@@ -509,6 +522,29 @@
     top: 12px;
     left: 12px;
     pointer-events: none;
+  }
+
+  .stream-loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2;
+  }
+
+  .stream-spinner {
+    width: 38px;
+    height: 38px;
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    border-top-color: rgba(255, 255, 255, 0.85);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   /* ── Control panel ───────────────────────────────────────────────────── */
