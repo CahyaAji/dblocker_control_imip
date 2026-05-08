@@ -138,98 +138,136 @@ func (h *DeviceHandler) Snapshot(c *gin.Context) {
 // Body: { "azimuth": 0-3600, "elevation": -900..900, "absolute_zoom": 0-1000 }
 // Moves the pan/tilt camera to an absolute position via ISAPI.
 func (h *DeviceHandler) PanTiltAbsolute(c *gin.Context) {
+
 	d := h.findDevice(c.Param("id"))
 	if d == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		return
 	}
 
-	var req PTZAbsoluteRequest
+	var req PanTiltAbsoluteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
 		return
 	}
 
-	status, upstreamCode, err := d.PTZAbsolute(req)
+	status, upstreamCode, err := d.PanTiltCtrl.PTZAbsolute(req.Azimuth, req.Elevation)
 	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
 
-	upstreamBody := gin.H{}
-	if status != nil && (status.RequestURL != "" || status.StatusCode != "" || status.StatusString != "" || status.SubStatusCode != "") {
-		upstreamBody = gin.H{
-			"request_url":     status.RequestURL,
-			"status_code":     status.StatusCode,
-			"status_string":   status.StatusString,
-			"sub_status_code": status.SubStatusCode,
-		}
-	}
-
 	c.JSON(http.StatusOK, gin.H{
-		"ok":              upstreamCode >= 200 && upstreamCode < 300,
-		"device_id":       d.ID,
-		"target_ip":       d.PanTiltCtrl.Host,
-		"upstream_status": upstreamCode,
-		"upstream_body":   upstreamBody,
+		"device_id":     d.ID,
+		"pantilt_ip":    d.PanTiltCtrl.Host,
+		"azimuth":       req.Azimuth,
+		"elevation":     req.Elevation,
+		"status":        status.StatusCode,
+		"upstream_code": upstreamCode,
 	})
 }
 
-// POST /devices/:id/ptz
-// Body: { "pan": 0, "tilt": 0, "zoom": 0 }
-// Pan/tilt routed to Normal camera, zoom routed to Thermal camera.
-// Send all zeros to stop. Values are -100..100.
-func (h *DeviceHandler) PTZControl(c *gin.Context) {
+type ZoomAbsoluteRequest struct {
+	Zoom int `json:"zoom"`
+}
+
+// max zoom 320
+func (h *DeviceHandler) ZoomAbsolute(c *gin.Context) {
 	d := h.findDevice(c.Param("id"))
 	if d == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		return
 	}
 
-	var req PTZContinuousRequest
+	var req ZoomAbsoluteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
 		return
 	}
 
-	if err := d.PTZContinuous(req); err != nil {
+	status, upstreamCode, err := d.ZoomCtrl.PTZZoomAbsolute(req.Zoom)
+	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+
+	c.JSON(http.StatusOK, gin.H{
+		"device_id":     d.ID,
+		"zoom_ip":       d.ZoomCtrl.Host,
+		"zoom":          req.Zoom,
+		"status":        status.StatusCode,
+		"upstream_code": upstreamCode,
+	})
 }
 
-// POST /devices/:id/ptz/stop
-// Stops all PTZ movement on both cameras.
-func (h *DeviceHandler) PTZStop(c *gin.Context) {
+type PanTiltContinuousRequest struct {
+	Pan  int `json:"pan"`
+	Tilt int `json:"tilt"`
+}
+
+// POST /devices/:id/pantilt/continuous
+// Body: { "pan": -100..100, "tilt": -100..100 }
+// Starts continuous pan/tilt. Send pan=0, tilt=0 to stop.
+func (h *DeviceHandler) PanTiltContinuous(c *gin.Context) {
 	d := h.findDevice(c.Param("id"))
 	if d == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		return
 	}
-	if err := d.PTZStop(); err != nil {
+
+	var req PanTiltContinuousRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+
+	status, upstreamCode, err := d.PanTiltCtrl.PTZContinuous(req.Pan, req.Tilt)
+	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+
+	c.JSON(http.StatusOK, gin.H{
+		"device_id":     d.ID,
+		"pantilt_ip":    d.PanTiltCtrl.Host,
+		"pan":           req.Pan,
+		"tilt":          req.Tilt,
+		"status":        status.StatusCode,
+		"upstream_code": upstreamCode,
+	})
 }
 
-// POST /devices/:id/ptz/preset/:preset
-// Moves both cameras to a saved preset position.
-func (h *DeviceHandler) PTZGotoPreset(c *gin.Context) {
+type ZoomContinuousRequest struct {
+	Zoom int `json:"zoom"`
+}
+
+// POST /devices/:id/zoom/continuous
+// Body: { "zoom": -100..100 }
+// Starts continuous zoom. Send zoom=0 to stop.
+func (h *DeviceHandler) ZoomContinuous(c *gin.Context) {
 	d := h.findDevice(c.Param("id"))
 	if d == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		return
 	}
-	presetID, err := strconv.Atoi(c.Param("preset"))
-	if err != nil || presetID < 1 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid preset id"})
+
+	var req ZoomContinuousRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
 		return
 	}
-	if err := d.PTZGotoPreset(presetID); err != nil {
+
+	status, upstreamCode, err := d.ZoomCtrl.PTZZoomContinuous(req.Zoom)
+	if err != nil {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "ok"})
+
+	c.JSON(http.StatusOK, gin.H{
+		"device_id":     d.ID,
+		"zoom_ip":       d.ZoomCtrl.Host,
+		"zoom":          req.Zoom,
+		"status":        status.StatusCode,
+		"upstream_code": upstreamCode,
+	})
 }

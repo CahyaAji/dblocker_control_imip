@@ -30,8 +30,11 @@ func main() {
 		cam.GET("/devices/:id/snapshot", h.Snapshot)
 		// cam.POST("/devices/:id/ptz", h.PTZControl)
 		// cam.POST("/devices/:id/ptz/stop", h.PTZStop)
-		cam.POST("/devices/:id/ptz/absolute", h.PanTiltAbsolute)
-		cam.POST("/devices/:id/ptz/preset/:preset", h.PTZGotoPreset)
+		cam.POST("/devices/:id/pantilt", h.PanTiltAbsolute)
+		cam.POST("/devices/:id/pantilt/continuous", h.PanTiltContinuous)
+		cam.POST("/devices/:id/zoom", h.ZoomAbsolute)
+		cam.POST("/devices/:id/zoom/continuous", h.ZoomContinuous)
+		// cam.POST("/devices/:id/ptz/preset/:preset", h.PTZGotoPreset)
 	}
 
 	log.Printf("Vision server starting on :%s", appPort)

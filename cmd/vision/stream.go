@@ -53,19 +53,21 @@ func (c *Camera) StartMJPEGStream(ctx context.Context) <-chan []byte {
 				return
 			}
 
-			select {
-			case <-time.After(delay):
-				// double the delay each failure, capped at maxRetryDelay
-				delay *= 2
-				if delay > maxRetryDelay {
-					delay = maxRetryDelay
-				}
-			case <-ctx.Done():
-				return
+			// Bug fix: double the delay BEFORE sleeping so the next sleep uses the
+			// increased value. The old code reset delay after the sleep, breaking
+			// the backoff entirely (always retried after 3 s).
+			delay *= 2
+			if delay > maxRetryDelay {
+				delay = maxRetryDelay
 			}
 
-			// reset delay on a successful reconnect (camera was reachable)
-			delay = retryDelay
+			t := time.NewTimer(delay)
+			select {
+			case <-t.C:
+			case <-ctx.Done():
+				t.Stop()
+				return
+			}
 		}
 	}()
 	return frames
@@ -110,6 +112,7 @@ func (c *Camera) runFFmpeg(ctx context.Context, rtspURL string, frames chan<- []
 
 	// Scan the raw byte stream for complete JPEG frames.
 	// JPEG starts with 0xFF 0xD8 and ends with 0xFF 0xD9.
+	const maxBufSize = 4 * 1024 * 1024 // 4 MB safety cap
 	buf := make([]byte, 0, 512*1024)
 	tmp := make([]byte, 65536)
 	for {
@@ -124,13 +127,25 @@ func (c *Camera) runFFmpeg(ctx context.Context, rtspURL string, frames chan<- []
 				}
 				end := bytes.Index(buf[start+2:], []byte{0xFF, 0xD9})
 				if end < 0 {
-					buf = buf[start:]
+					// Bug fix: compact instead of reslicing to free the old backing
+					// array; reslicing keeps the whole underlying array alive.
+					// Also guard against unbounded growth on a corrupt stream.
+					remaining := buf[start:]
+					if len(remaining) > maxBufSize {
+						log.Printf("[stream %s] buffer exceeded %d bytes without a complete frame, resetting", c.Host, maxBufSize)
+						buf = buf[:0]
+					} else {
+						n := copy(buf, remaining)
+						buf = buf[:n]
+					}
 					break
 				}
 				end = start + 2 + end + 2
 				frame := make([]byte, end-start)
 				copy(frame, buf[start:end])
-				buf = buf[end:]
+				// Bug fix: compact to free backing array instead of reslicing.
+				n := copy(buf, buf[end:])
+				buf = buf[:n]
 				select {
 				case frames <- frame:
 				case <-ctx.Done():

@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/xml"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/icholy/digest"
@@ -20,6 +22,9 @@ type Camera struct {
 	Username      string
 	Password      string
 	UseMainStream bool // true = use main stream for MJPEG (thermal cameras often lack sub-stream)
+
+	clientOnce sync.Once
+	client     *http.Client
 }
 
 // Device represents one physical camera mount with 4 separate IPs:
@@ -58,19 +63,23 @@ func (c *Camera) isapiURL(path string) string {
 	return fmt.Sprintf("http://%s:%d%s", c.Host, c.Port, path)
 }
 
-// isapiClient returns an HTTP client configured with Digest Auth for this camera.
-// Each camera gets its own transport so credentials are per-camera.
+// isapiClient returns the shared HTTP client configured with Digest Auth for this camera.
+// The client is created once and reused so the underlying TCP connection pool is shared
+// across all ISAPI calls, avoiding a new connection per request.
 func (c *Camera) isapiClient() *http.Client {
-	return &http.Client{
-		Timeout: 8 * time.Second,
-		Transport: &digest.Transport{
-			Username: c.Username,
-			Password: c.Password,
-			Transport: &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	c.clientOnce.Do(func() {
+		c.client = &http.Client{
+			Timeout: 5 * time.Second,
+			Transport: &digest.Transport{
+				Username: c.Username,
+				Password: c.Password,
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
 			},
-		},
-	}
+		}
+	})
+	return c.client
 }
 
 // isapiDo sends an authenticated HTTP request to the camera ISAPI endpoint.
@@ -84,16 +93,6 @@ func (c *Camera) isapiDo(method, path, contentType string, body io.Reader) (*htt
 		req.Header.Set("Content-Type", contentType)
 	}
 	return c.isapiClient().Do(req)
-}
-
-// ---- PTZ ----
-
-// PTZContinuousRequest holds speed values for continuous PTZ movement.
-// Pan/Tilt/Zoom range: -100 to 100 (0 = stop).
-type PTZContinuousRequest struct {
-	Pan  int `json:"pan"`  // negative = left, positive = right
-	Tilt int `json:"tilt"` // negative = down, positive = up
-	Zoom int `json:"zoom"` // negative = wide, positive = tele
 }
 
 type ptzSpeed struct {
@@ -135,104 +134,16 @@ func (c *Camera) Snapshot() ([]byte, string, error) {
 	return data, ct, nil
 }
 
-// ---- Device-level PTZ (routes pan/tilt → Normal, zoom → Thermal) ----
-
-// PTZContinuous routes a combined PTZ command:
-// - Pan & Tilt → PanTiltCtrl camera
-// - Zoom       → ZoomCtrl camera
-// Call with all zeros to stop both.
-func (d *Device) PTZContinuous(req PTZContinuousRequest) error {
-	var firstErr error
-	if err := d.PanTiltCtrl.ptzContinuous(req.Pan, req.Tilt, 0); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := d.ZoomCtrl.ptzContinuous(0, 0, req.Zoom); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	return firstErr
-}
-
-// PTZStop stops movement on both control cameras.
-func (d *Device) PTZStop() error {
-	return d.PTZContinuous(PTZContinuousRequest{})
-}
-
-// PTZGotoPreset moves both control cameras to a saved preset.
-func (d *Device) PTZGotoPreset(presetID int) error {
-	var firstErr error
-	if err := d.PanTiltCtrl.ptzGotoPreset(presetID); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	if err := d.ZoomCtrl.ptzGotoPreset(presetID); err != nil && firstErr == nil {
-		firstErr = err
-	}
-	return firstErr
-}
-
-// ---- Camera-level PTZ (internal) ----
-
-// ptzContinuous sends a continuous PTZ move command to this camera.
-// Call with all zeros to stop movement.
-func (c *Camera) ptzContinuous(pan, tilt, zoom int) error {
-	data := ptzContinuousXML{
-		Pan:  pan,
-		Tilt: tilt,
-		Zoom: zoom,
-		Speed: ptzSpeed{
-			PanSpeed:  abs(pan),
-			TiltSpeed: abs(tilt),
-			ZoomSpeed: abs(zoom),
-		},
-	}
-	xmlBody, err := xml.Marshal(data)
-	if err != nil {
-		return fmt.Errorf("marshal ptz: %w", err)
-	}
-
-	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/continuous", c.Channel)
-	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytesReader(xmlBody))
-	if err != nil {
-		return fmt.Errorf("ptz continuous: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ptz continuous returned %d: %s", resp.StatusCode, string(b))
-	}
-	return nil
-}
-
-// ptzGotoPreset moves this camera to a saved preset position.
-func (c *Camera) ptzGotoPreset(presetID int) error {
-	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/presets/%d/goto", c.Channel, presetID)
-	resp, err := c.isapiDo(http.MethodPut, path, "", nil)
-	if err != nil {
-		return fmt.Errorf("ptz goto preset: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 300 {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("ptz goto preset returned %d: %s", resp.StatusCode, string(b))
-	}
-	return nil
-}
-
 // ---- Absolute PTZ ----
-
-// PTZAbsoluteRequest holds absolute position values.
-// Azimuth: 0–3600 (tenths of a degree, 0 = north/home).
-// Elevation: -900..900 (tenths of a degree).
-// AbsoluteZoom: 0..1000.
-type PTZAbsoluteRequest struct {
-	Azimuth      int     `json:"azimuth"`
-	Elevation    int     `json:"elevation"`
-	AbsoluteZoom float64 `json:"absolute_zoom"`
+type PanTiltAbsoluteRequest struct {
+	Azimuth   int `json:"azimuth"`
+	Elevation int `json:"elevation"`
 }
 
 type ptzAbsoluteSet struct {
-	Azimuth      int     `xml:"azimuth"`
-	Elevation    int     `xml:"elevation"`
-	AbsoluteZoom float64 `xml:"absoluteZoom"`
+	Azimuth      int `xml:"azimuth"`
+	Elevation    int `xml:"elevation"`
+	AbsoluteZoom int `xml:"absoluteZoom"`
 }
 
 type ptzAbsoluteXML struct {
@@ -249,22 +160,25 @@ type hikResponseStatus struct {
 	SubStatusCode string   `xml:"subStatusCode"`
 }
 
-// ptzAbsolute sends an absolute position command to this camera.
-func (c *Camera) ptzAbsolute(azimuth, elevation int, absoluteZoom float64) (*hikResponseStatus, int, error) {
-	data := ptzAbsoluteXML{
+func (c *Camera) PTZAbsolute(azimuth int, elevation int) (*hikResponseStatus, int, error) {
+
+	bodyStruct := ptzAbsoluteXML{
 		AbsoluteHigh: ptzAbsoluteSet{
 			Azimuth:      azimuth,
 			Elevation:    elevation,
-			AbsoluteZoom: absoluteZoom,
+			AbsoluteZoom: 0,
 		},
 	}
-	xmlBody, err := xml.Marshal(data)
+
+	xmlBody, err := xml.Marshal(bodyStruct)
 	if err != nil {
 		return nil, 0, fmt.Errorf("marshal ptz absolute: %w", err)
 	}
+
 	body := append([]byte(xml.Header), xmlBody...)
+
 	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/absolute", c.Channel)
-	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytesReader(body))
+	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytes.NewReader(body))
 	if err != nil {
 		return nil, 0, fmt.Errorf("ptz absolute: %w", err)
 	}
@@ -280,34 +194,98 @@ func (c *Camera) ptzAbsolute(azimuth, elevation int, absoluteZoom float64) (*hik
 	return nil, resp.StatusCode, nil
 }
 
-// PTZAbsolute moves the PanTiltCtrl camera to an absolute position.
-func (d *Device) PTZAbsolute(req PTZAbsoluteRequest) (*hikResponseStatus, int, error) {
-	return d.PanTiltCtrl.ptzAbsolute(req.Azimuth, req.Elevation, req.AbsoluteZoom)
-}
+func (c *Camera) PTZZoomAbsolute(zoom int) (*hikResponseStatus, int, error) {
 
-// ---- helpers ----
-
-func abs(x int) int {
-	if x < 0 {
-		return -x
+	bodyStruct := ptzAbsoluteXML{
+		AbsoluteHigh: ptzAbsoluteSet{
+			Azimuth:      0,
+			Elevation:    0,
+			AbsoluteZoom: zoom,
+		},
 	}
-	return x
-}
 
-func bytesReader(b []byte) io.Reader {
-	return &bytesReadCloser{data: b, pos: 0}
-}
-
-type bytesReadCloser struct {
-	data []byte
-	pos  int
-}
-
-func (br *bytesReadCloser) Read(p []byte) (int, error) {
-	if br.pos >= len(br.data) {
-		return 0, io.EOF
+	xmlBody, err := xml.Marshal(bodyStruct)
+	if err != nil {
+		return nil, 0, fmt.Errorf("marshal ptz absolute: %w", err)
 	}
-	n := copy(p, br.data[br.pos:])
-	br.pos += n
-	return n, nil
+
+	body := append([]byte(xml.Header), xmlBody...)
+
+	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/absolute", c.Channel)
+	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("ptz absolute: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("ptz absolute read response: %w", err)
+	}
+	var status hikResponseStatus
+	if xmlErr := xml.Unmarshal(respBody, &status); xmlErr == nil {
+		return &status, resp.StatusCode, nil
+	}
+	return nil, resp.StatusCode, nil
+
+}
+
+// PTZContinuous sends a continuous pan/tilt move command.
+// pan and tilt are speeds: negative = left/down, positive = right/up, 0 = stop that axis.
+// Call with pan=0, tilt=0 to stop movement.
+func (c *Camera) PTZContinuous(pan, tilt int) (*hikResponseStatus, int, error) {
+	data := ptzContinuousXML{
+		Pan:  pan,
+		Tilt: tilt,
+		Zoom: 0,
+	}
+	xmlBody, err := xml.Marshal(data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("marshal ptz continuous: %w", err)
+	}
+	body := append([]byte(xml.Header), xmlBody...)
+	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/continuous", c.Channel)
+	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("ptz continuous: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("ptz continuous read response: %w", err)
+	}
+	var status hikResponseStatus
+	if xmlErr := xml.Unmarshal(respBody, &status); xmlErr == nil {
+		return &status, resp.StatusCode, nil
+	}
+	return nil, resp.StatusCode, nil
+}
+
+// PTZZoomContinuous sends a continuous zoom command.
+// zoom is speed: positive = zoom in, negative = zoom out, 0 = stop.
+func (c *Camera) PTZZoomContinuous(zoom int) (*hikResponseStatus, int, error) {
+	data := ptzContinuousXML{
+		Pan:  0,
+		Tilt: 0,
+		Zoom: zoom,
+	}
+	xmlBody, err := xml.Marshal(data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("marshal ptz zoom continuous: %w", err)
+	}
+	body := append([]byte(xml.Header), xmlBody...)
+	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/continuous", c.Channel)
+	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("ptz zoom continuous: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("ptz zoom continuous read response: %w", err)
+	}
+	var status hikResponseStatus
+	if xmlErr := xml.Unmarshal(respBody, &status); xmlErr == nil {
+		return &status, resp.StatusCode, nil
+	}
+	return nil, resp.StatusCode, nil
 }
