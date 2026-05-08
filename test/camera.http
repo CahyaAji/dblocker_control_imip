@@ -69,3 +69,27 @@ Content-Type: application/json
 {
     "zoom": 0
 }
+
+### Record - start (cam: "normal" | "thermal", duration in seconds; 0 = use server max of 10 min)
+POST {{host}}/cam/devices/{{deviceId}}/record/start
+Content-Type: application/json
+
+{
+    "cam": "normal",
+    "duration": 10
+}
+
+### Record - start with explicit duration (e.g. 60 seconds)
+POST {{host}}/cam/devices/{{deviceId}}/record/start
+Content-Type: application/json
+
+{
+    "cam": "normal",
+    "duration": 60
+}
+
+### Record - stop
+POST {{host}}/cam/devices/{{deviceId}}/record/stop
+
+### Record - status
+GET {{host}}/cam/devices/{{deviceId}}/record/status
