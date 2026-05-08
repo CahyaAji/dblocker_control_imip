@@ -24,7 +24,7 @@ POST {{host}}/cam/devices/{{deviceId}}/pantilt
 Content-Type: application/json
 
 {
-    "azimuth": 100,
+    "azimuth": -100,
     "elevation": 0
 }
 
