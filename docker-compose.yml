@@ -43,6 +43,11 @@ services:
       MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
       MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
       MQTT_PASSWORD: ${MQTT_PASSWORD:-mysecretmqttpassword}
+      VISION_URL: http://dblocker-vision:8090
+      DRONE_RANGE_FALLBACK: ${DRONE_RANGE_FALLBACK:-1000}
+      CAMERA_HEIGHT: ${CAMERA_HEIGHT:-20}
+      DEVICE_1_NORTH_OFFSET: ${DEVICE_1_NORTH_OFFSET:-0}
+      DEVICE_2_NORTH_OFFSET: ${DEVICE_2_NORTH_OFFSET:-0}
 
   vision:
     container_name: dblocker-vision
@@ -71,6 +76,9 @@ services:
       DEVICE_2_ZOOM_HOST: ${DEVICE_2_ZOOM_HOST:-}
       DEVICE_2_LAT: ${DEVICE_2_LAT:-0}
       DEVICE_2_LNG: ${DEVICE_2_LNG:-0}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-mysecretmqttpassword}
       RECORD_DIR: /recordings
     volumes:
       - ${RECORD_DIR_HOST:-./recordings}:/recordings
