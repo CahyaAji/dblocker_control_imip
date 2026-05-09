@@ -439,3 +439,44 @@ func (h *DeviceHandler) RecordStatus(c *gin.Context) {
 		"remaining_seconds": int(remaining),
 	})
 }
+type WiperControlRequest struct {
+	Status string `json:"status"` // "on" or "off"
+}
+
+// POST /devices/:id/wiper
+// Body: { "status": "on" | "off" }
+// Sends a wiper command to the pan/tilt camera via ISAPI AuxControl.
+func (h *DeviceHandler) WiperControl(c *gin.Context) {
+	d := h.findDevice(c.Param("id"))
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+
+	var req WiperControlRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request payload"})
+		return
+	}
+	if req.Status != "on" && req.Status != "off" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "status must be 'on' or 'off'"})
+		return
+	}
+
+	status, upstreamCode, err := d.PanTiltCtrl.PTZWiper(req.Status)
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp := gin.H{
+		"device_id":     d.ID,
+		"pantilt_ip":    d.PanTiltCtrl.Host,
+		"wiper":         req.Status,
+		"upstream_code": upstreamCode,
+	}
+	if status != nil {
+		resp["status"] = status.StatusCode
+	}
+	c.JSON(http.StatusOK, resp)
+}

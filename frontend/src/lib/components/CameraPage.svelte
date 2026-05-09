@@ -135,6 +135,28 @@
 
   const stopZoom = () => sendZoom(0);
 
+  // ── Wiper ─────────────────────────────────────────────────────────────────
+  let wiperOn = $state(false);
+  let wiperLoading = $state(false);
+
+  const toggleWiper = async () => {
+    if (!focusedDevice || wiperLoading) return;
+    const newStatus = wiperOn ? "off" : "on";
+    wiperLoading = true;
+    try {
+      const res = await fetch(`/cam/devices/${focusedDevice.id}/wiper`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) wiperOn = !wiperOn;
+    } catch {
+      // ignore
+    } finally {
+      wiperLoading = false;
+    }
+  };
+
   // ── Recording ─────────────────────────────────────────────────────────────
   interface RecordStatusData {
     recording: boolean;
@@ -417,6 +439,22 @@
                 Zoom Out
               </button>
             </div>
+          </div>
+
+          <!-- Wiper -->
+          <div class="ctrl-section">
+            <p class="ctrl-label">Wiper</p>
+            <button
+              type="button"
+              class="wiper-btn"
+              class:wiper-on={wiperOn}
+              onclick={toggleWiper}
+              disabled={wiperLoading}
+              aria-label="Toggle wiper"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M5 7a7 7 0 0 1 14 0"/><path d="M5 7l7 5 7-5"/></svg>
+              {wiperOn ? "Wiper ON" : "Wiper OFF"}
+            </button>
           </div>
 
           <!-- Record -->
@@ -905,6 +943,42 @@
   }
 
   .zoom-btn:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* ── Wiper button ────────────────────────────────────────────────────── */
+  .wiper-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+    background: color-mix(in srgb, var(--bg-elevated) 90%, transparent);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    width: 100%;
+  }
+
+  .wiper-btn:hover {
+    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent-cyan) 14%, var(--bg-elevated) 86%);
+    border-color: color-mix(in srgb, var(--accent-cyan) 50%, transparent);
+  }
+
+  .wiper-btn.wiper-on {
+    background: color-mix(in srgb, #2980b9 22%, var(--bg-elevated) 78%);
+    border-color: color-mix(in srgb, #2980b9 60%, transparent);
+    color: #5dade2;
+  }
+
+  .wiper-btn:disabled {
     opacity: 0.38;
     cursor: not-allowed;
     pointer-events: none;

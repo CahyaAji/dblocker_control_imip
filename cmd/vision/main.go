@@ -70,6 +70,7 @@ func main() {
 		cam.POST("/devices/:id/record/start", h.RecordStart)
 		cam.POST("/devices/:id/record/stop", h.RecordStop)
 		cam.GET("/devices/:id/record/status", h.RecordStatus)
+		cam.POST("/devices/:id/wiper", h.WiperControl)
 	}
 
 	log.Printf("Vision server starting on :%s", appPort)

@@ -364,3 +364,46 @@ func (c *Camera) PTZZoomContinuous(zoom int) (*hikResponseStatus, int, error) {
 	}
 	return nil, resp.StatusCode, nil
 }
+
+// ---- Wiper ----
+
+type ptzAuxXML struct {
+	XMLName xml.Name `xml:"PTZAux"`
+	Version string   `xml:"version,attr"`
+	Xmlns   string   `xml:"xmlns,attr"`
+	ID      int      `xml:"id"`
+	Type    string   `xml:"type"`
+	Status  string   `xml:"status"`
+}
+
+// PTZWiper sends a wiper on/off command via ISAPI AuxControl.
+// status must be "on" or "off".
+func (c *Camera) PTZWiper(wiperStatus string) (*hikResponseStatus, int, error) {
+	data := ptzAuxXML{
+		Version: "2.0",
+		Xmlns:   "http://www.isapi.org/ver20/XMLSchema",
+		ID:      1,
+		Type:    "WIPER",
+		Status:  wiperStatus,
+	}
+	xmlBody, err := xml.Marshal(data)
+	if err != nil {
+		return nil, 0, fmt.Errorf("marshal wiper: %w", err)
+	}
+	body := append([]byte(xml.Header), xmlBody...)
+	path := fmt.Sprintf("/ISAPI/PTZCtrl/channels/%d/auxcontrols/1", c.Channel)
+	resp, err := c.isapiDo(http.MethodPut, path, "application/xml", bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("wiper: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("wiper read response: %w", err)
+	}
+	var hikStatus hikResponseStatus
+	if xmlErr := xml.Unmarshal(respBody, &hikStatus); xmlErr == nil {
+		return &hikStatus, resp.StatusCode, nil
+	}
+	return nil, resp.StatusCode, nil
+}
