@@ -20,6 +20,7 @@
   let devices = $state<DeviceInfo[]>([]);
   let focusedSlot = $state<number | null>(null);
   let focusedView = $state<ViewType>("normal");
+  let detectEnabled = $state(false);
   let streamLoading = $state(false);
   let loading = $state(false);
   let error = $state<string | null>(null);
@@ -29,8 +30,18 @@
     focusedSlot !== null ? (devices[focusedSlot] ?? null) : null,
   );
 
-  const streamUrl = (id: number, view: ViewType) =>
-    `/cam/devices/${id}/stream/${view}`;
+  const streamUrl = (id: number, view: ViewType, detect: boolean = false) =>
+    detect && view === "normal"
+      ? `/cam/devices/${id}/stream/${view}/detect`
+      : `/cam/devices/${id}/stream/${view}`;
+
+  // Detection only makes sense for the normal cam — auto-disable when switching
+  // to thermal so the UI state stays consistent with what the backend allows.
+  $effect(() => {
+    if (focusedView === "thermal" && detectEnabled) {
+      detectEnabled = false;
+    }
+  });
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
   onMount(async () => {
@@ -71,6 +82,7 @@
   const openFocus = (slot: number) => {
     focusedSlot = slot;
     focusedView = "normal";
+    detectEnabled = false;
     streamLoading = true;
   };
 
@@ -165,7 +177,7 @@
       await fetch(`/cam/devices/${focusedDevice.id}/record/start`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cam: focusedView }),
+        body: JSON.stringify({ cam: focusedView, detect: detectEnabled }),
       });
       await pollRecStatus();
     } catch {}
@@ -273,7 +285,7 @@
         <!-- Stream -->
         <div class="focused-stream-wrap">
           <img
-            src={streamUrl(focusedDevice.id, focusedView)}
+            src={streamUrl(focusedDevice.id, focusedView, detectEnabled)}
             alt="{focusedDevice.name} {focusedView} stream"
             class="stream-img"
             onload={() => (streamLoading = false)}
@@ -289,6 +301,9 @@
               <span class="label-badge normal-badge">Normal</span>
             {:else}
               <span class="label-badge thermal-badge">Thermal</span>
+            {/if}
+            {#if detectEnabled && focusedView === "normal"}
+              <span class="label-badge detect-badge">YOLO</span>
             {/if}
           </div>
           {#if recStatus.recording}
@@ -320,6 +335,20 @@
               <button type="button" class="view-btn" class:active={focusedView === "thermal"}
                 disabled={recStatus.recording}
                 onclick={() => { if (focusedView !== "thermal") { streamLoading = true; focusedView = "thermal"; } }}>Thermal</button>
+            </div>
+          </div>
+
+          <!-- Detection toggle (normal cam only) -->
+          <div class="ctrl-section">
+            <p class="ctrl-label">Detection</p>
+            <div class="view-toggle">
+              <button type="button" class="view-btn" class:active={!detectEnabled}
+                disabled={recStatus.recording}
+                onclick={() => { if (detectEnabled) { streamLoading = true; detectEnabled = false; } }}>Off</button>
+              <button type="button" class="view-btn" class:active={detectEnabled}
+                disabled={recStatus.recording || focusedView === "thermal"}
+                title={focusedView === "thermal" ? "Detection only available on Normal" : ""}
+                onclick={() => { if (!detectEnabled) { streamLoading = true; detectEnabled = true; } }}>YOLO</button>
             </div>
           </div>
 
@@ -633,6 +662,7 @@
 
   .normal-badge  { background: color-mix(in srgb, var(--accent-blue) 82%, #000 18%); }
   .thermal-badge { background: color-mix(in srgb, #f97316 82%, #000 18%); }
+  .detect-badge  { background: color-mix(in srgb, #10b981 82%, #000 18%); margin-left: 6px; }
 
   .click-hint {
     font-size: 11px;
