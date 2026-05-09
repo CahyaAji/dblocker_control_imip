@@ -17,7 +17,7 @@ RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /app/
 # ── Runtime base selection ─────────────────────────────────────────────────
 
 FROM ubuntu:24.04 AS runtime-false
-FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu24.04 AS runtime-true
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04 AS runtime-true
 
 # Select the matching base via the build arg value ("false" or "true").
 FROM runtime-${USE_GPU} AS runtime
@@ -47,7 +47,7 @@ RUN if [ "$USE_GPU" = "true" ]; then \
     && mkdir -p /opt/onnxruntime \
     && tar -xzf /tmp/ort.tgz --strip-components=1 -C /opt/onnxruntime \
     && rm /tmp/ort.tgz \
-    && cp /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
+    && cp /opt/onnxruntime/lib/libonnxruntime*.so* /usr/local/lib/ \
     && ldconfig
 
 WORKDIR /app
