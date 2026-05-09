@@ -168,7 +168,12 @@
             source: SOURCE_ID,
             paint: {
                 "circle-radius": 12,
-                "circle-color": "rgba(210, 54, 31, 0.15)",
+                "circle-color": [
+                    "case",
+                    ["get", "online"],
+                    "rgba(210, 54, 31, 0.15)",
+                    "rgba(107, 114, 128, 0.12)",
+                ],
                 "circle-blur": 0.5,
             },
         });
@@ -184,14 +189,19 @@
             },
         });
 
-        // Core red dot
+        // Core dot — red when online, gray when offline
         map.addLayer({
             id: LAYER_CORE_ID,
             type: "circle",
             source: SOURCE_ID,
             paint: {
                 "circle-radius": 7,
-                "circle-color": "#ff6f59",
+                "circle-color": [
+                    "case",
+                    ["get", "online"],
+                    "#ff6f59",
+                    "#6b7280",
+                ],
             },
         });
 
@@ -523,22 +533,27 @@
         }
     }
 
-    function buildGeoJSON(data: DBlocker[]): GeoJSON.FeatureCollection {
+    function buildGeoJSON(data: DBlocker[], bridge: Record<string, string> = {}): GeoJSON.FeatureCollection {
         return {
             type: "FeatureCollection",
             features: data
                 .filter((d) => d.latitude != null && d.longitude != null)
-                .map((d) => ({
-                    type: "Feature" as const,
-                    geometry: {
-                        type: "Point" as const,
-                        coordinates: [d.longitude!, d.latitude!],
-                    },
-                    properties: {
-                        id: d.id,
-                        name: d.name,
-                    },
-                })),
+                .map((d) => {
+                    const staPayload = bridge[`dbl/${d.serial_numb}/sta`] ?? null;
+                    const online = staPayload !== null && staPayload !== "OFF";
+                    return {
+                        type: "Feature" as const,
+                        geometry: {
+                            type: "Point" as const,
+                            coordinates: [d.longitude!, d.latitude!],
+                        },
+                        properties: {
+                            id: d.id,
+                            name: d.name,
+                            online,
+                        },
+                    };
+                }),
         };
     }
 
@@ -548,7 +563,7 @@
         // 1. Update native GeoJSON source (perfectly synced with tiles)
         const source = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource;
         if (source) {
-            source.setData(buildGeoJSON(data));
+            source.setData(buildGeoJSON(data, $bridgeStore));
         }
 
         // 2. Update HTML overlay markers (radar animation only)
