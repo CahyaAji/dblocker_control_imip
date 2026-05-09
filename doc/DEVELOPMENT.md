@@ -5,6 +5,22 @@
 docker compose down && docker compose up -d --build
 ```
 
+```
+docker compose --env-file .env.prod \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.gpu.yml \
+  up -d
+```
+
+```
+docker compose --env-file .env.prod \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml \
+  -f docker-compose.gpu.yml \
+  down
+```
+
 This file is for day-to-day development on your laptop.
 
 ### 1) First-time setup (new machine / fresh clone)
