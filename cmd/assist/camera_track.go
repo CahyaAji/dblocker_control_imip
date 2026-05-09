@@ -294,7 +294,7 @@ func startCameraRecord(label string, deviceID int) {
 	for _, cam := range []string{"normal", "thermal"} {
 		camName := cam // capture for goroutine
 		url := fmt.Sprintf("%s/cam/devices/%d/record/start", visionURL, deviceID)
-		payload := map[string]any{"cam": camName, "duration": recordSeconds}
+		payload := map[string]any{"cam": camName, "duration": recordSeconds, "detect": camName == "normal"}
 		body, _ := json.Marshal(payload)
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

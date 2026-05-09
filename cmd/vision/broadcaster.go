@@ -54,8 +54,12 @@ func (b *StreamBroadcaster) Unsubscribe(id uint64) {
 	close(ch)
 	delete(b.subs, id)
 	if len(b.subs) == 0 && b.running {
+		// Mark stopped synchronously so a Subscribe arriving after we cancel
+		// (but before the run goroutine wakes up) starts a fresh goroutine
+		// instead of attaching to the dying one.
+		b.running = false
 		b.cancel()
-		// b.running is cleared by the run goroutine when it exits.
+		b.cancel = nil
 	}
 }
 
@@ -84,6 +88,9 @@ func (b *StreamBroadcaster) run(ctx context.Context) {
 	// Close all remaining subscriber channels so consumers can detect the end.
 	b.mu.Lock()
 	b.running = false
+	if b.cancel != nil {
+		b.cancel = nil
+	}
 	for id, ch := range b.subs {
 		close(ch)
 		delete(b.subs, id)

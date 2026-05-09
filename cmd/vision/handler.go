@@ -133,6 +133,55 @@ func (h *DeviceHandler) StreamMJPEG(c *gin.Context) {
 	}
 }
 
+// GET /devices/:id/stream/:cam/detect
+// Serves an MJPEG stream of the requested camera with YOLO bounding boxes drawn.
+// Only supported for cam=normal. A single inference goroutine per device is shared
+// across all viewers and stops automatically when the last viewer disconnects.
+func (h *DeviceHandler) StreamMJPEGDetect(c *gin.Context) {
+	d := h.findDevice(c.Param("id"))
+	if d == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
+		return
+	}
+	if c.Param("cam") != "normal" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "detection is only available for the normal camera"})
+		return
+	}
+	bc := d.NormalCam.GetDetectBroadcaster()
+	if bc == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "detector not configured (set DETECT_MODEL_PATH)"})
+		return
+	}
+
+	subID, frames := bc.Subscribe()
+	defer bc.Unsubscribe(subID)
+
+	const boundary = "mjpegframe"
+	c.Header("Content-Type", "multipart/x-mixed-replace; boundary="+boundary)
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Status(http.StatusOK)
+
+	w := c.Writer
+	reqCtx := c.Request.Context()
+	for {
+		select {
+		case frame, ok := <-frames:
+			if !ok {
+				return
+			}
+			fmt.Fprintf(w, "--%s\r\nContent-Type: image/jpeg\r\nContent-Length: %d\r\n\r\n", boundary, len(frame))
+			w.Write(frame)
+			fmt.Fprintf(w, "\r\n")
+			if flusher, ok := w.(http.Flusher); ok {
+				flusher.Flush()
+			}
+		case <-reqCtx.Done():
+			return
+		}
+	}
+}
+
 // GET /devices/:id/snapshot?cam=normal|thermal
 // Returns a JPEG snapshot directly from the camera. Defaults to normal.
 func (h *DeviceHandler) Snapshot(c *gin.Context) {
@@ -331,6 +380,7 @@ func (h *DeviceHandler) RecordStart(c *gin.Context) {
 	}
 	var req struct {
 		Cam      string  `json:"cam"`
+		Detect   bool    `json:"detect"`
 		Duration float64 `json:"duration"` // seconds; 0 = use max
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -341,11 +391,11 @@ func (h *DeviceHandler) RecordStart(c *gin.Context) {
 		req.Cam = "normal"
 	}
 	dur := time.Duration(req.Duration * float64(time.Second))
-	if err := d.RecordStart(req.Cam, dur, h.recordDir); err != nil {
+	if err := d.RecordStart(req.Cam, req.Detect, dur, h.recordDir); err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"status": "started", "cam": req.Cam})
+	c.JSON(http.StatusOK, gin.H{"status": "started", "cam": req.Cam, "detect": req.Detect})
 }
 
 // POST /devices/:id/record/stop
@@ -369,7 +419,7 @@ func (h *DeviceHandler) RecordStatus(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "device not found"})
 		return
 	}
-	recording, cam, filename, startedAt := d.RecordStatus()
+	recording, cam, filename, detect, startedAt := d.RecordStatus()
 	if !recording {
 		c.JSON(http.StatusOK, gin.H{"recording": false})
 		return
@@ -382,6 +432,7 @@ func (h *DeviceHandler) RecordStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"recording":         true,
 		"cam":               cam,
+		"detect":            detect,
 		"filename":          filename,
 		"started_at":        startedAt.Format(time.RFC3339),
 		"elapsed_seconds":   int(elapsed),

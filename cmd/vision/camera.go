@@ -28,6 +28,10 @@ type Camera struct {
 	client          *http.Client
 	broadcasterOnce sync.Once
 	broadcaster     *StreamBroadcaster
+
+	// detectBroadcaster is created lazily by AttachDetector + GetDetectBroadcaster.
+	detectMu          sync.Mutex
+	detectBroadcaster *DetectionBroadcaster
 }
 
 // GetBroadcaster returns the shared StreamBroadcaster for this camera.
@@ -37,6 +41,27 @@ func (c *Camera) GetBroadcaster() *StreamBroadcaster {
 		c.broadcaster = newStreamBroadcaster(c)
 	})
 	return c.broadcaster
+}
+
+// AttachDetector wires a YOLO detector to this camera so that
+// GetDetectBroadcaster returns annotated frames. Must be called once before
+// the first GetDetectBroadcaster call. Pass nil to disable detection.
+func (c *Camera) AttachDetector(d *Detector, jpegQuality int) {
+	c.detectMu.Lock()
+	defer c.detectMu.Unlock()
+	if d == nil {
+		c.detectBroadcaster = nil
+		return
+	}
+	c.detectBroadcaster = newDetectionBroadcaster(c, d, jpegQuality)
+}
+
+// GetDetectBroadcaster returns the annotated-frame broadcaster, or nil if no
+// detector has been attached to this camera.
+func (c *Camera) GetDetectBroadcaster() *DetectionBroadcaster {
+	c.detectMu.Lock()
+	defer c.detectMu.Unlock()
+	return c.detectBroadcaster
 }
 
 // Device represents one physical camera mount with 4 separate IPs:
