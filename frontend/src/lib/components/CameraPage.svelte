@@ -325,7 +325,7 @@
               <span class="label-badge thermal-badge">Thermal</span>
             {/if}
             {#if detectEnabled && focusedView === "normal"}
-              <span class="label-badge detect-badge">YOLO</span>
+              <span class="label-badge detect-badge">Show Mark</span>
             {/if}
           </div>
           {#if recStatus.recording}
@@ -370,7 +370,7 @@
               <button type="button" class="view-btn" class:active={detectEnabled}
                 disabled={recStatus.recording || focusedView === "thermal"}
                 title={focusedView === "thermal" ? "Detection only available on Normal" : ""}
-                onclick={() => { if (!detectEnabled) { streamLoading = true; detectEnabled = true; } }}>YOLO</button>
+                onclick={() => { if (!detectEnabled) { streamLoading = true; detectEnabled = true; } }}>Show Mark</button>
             </div>
           </div>
 
