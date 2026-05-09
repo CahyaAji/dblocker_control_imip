@@ -1,4 +1,7 @@
-FROM golang:1.25-alpine AS builder
+# Global ARG — must appear before the first FROM to be usable in FROM instructions.
+ARG USE_GPU=false
+
+FROM golang:1.25 AS builder
 
 WORKDIR /app
 
@@ -9,14 +12,48 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /app/vision ./cmd/vision
+RUN CGO_ENABLED=1 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o /app/vision ./cmd/vision
 
-FROM alpine:3.21
+# ── Runtime base selection ─────────────────────────────────────────────────
 
-RUN apk add --no-cache ffmpeg ca-certificates
+FROM ubuntu:24.04 AS runtime-false
+FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu24.04 AS runtime-true
+
+# Select the matching base via the build arg value ("false" or "true").
+FROM runtime-${USE_GPU} AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ffmpeg \
+        ca-certificates \
+        curl \
+        libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ONNX Runtime shared library.
+# CPU build  →  onnxruntime-linux-x64-<ver>.tgz
+# GPU build  →  onnxruntime-linux-x64-gpu-<ver>.tgz  (includes CUDA + TensorRT EPs)
+ARG USE_GPU=false
+ARG ORT_VERSION=1.25.1
+RUN if [ "$USE_GPU" = "true" ]; then \
+        ORT_PKG="onnxruntime-linux-x64-gpu-${ORT_VERSION}.tgz"; \
+    else \
+        ORT_PKG="onnxruntime-linux-x64-${ORT_VERSION}.tgz"; \
+    fi \
+    && curl -fsSL -o /tmp/ort.tgz \
+        "https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/${ORT_PKG}" \
+    && mkdir -p /opt/onnxruntime \
+    && tar -xzf /tmp/ort.tgz --strip-components=1 -C /opt/onnxruntime \
+    && rm /tmp/ort.tgz \
+    && cp /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
+    && ldconfig
 
 WORKDIR /app
 COPY --from=builder /app/vision /app/vision
+
+ENV ORT_LIBRARY_PATH=/usr/local/lib/libonnxruntime.so
 
 EXPOSE 8090
 ENTRYPOINT ["/app/vision"]
