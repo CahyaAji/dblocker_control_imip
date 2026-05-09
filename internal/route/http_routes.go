@@ -23,12 +23,13 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	actionLogRepo := repository.NewActionLogRepository(db)
 	detectorRepo := repository.NewDetectorRepository(db)
 	droneEventRepo := repository.NewDroneEventRepository(db)
+	appSettingRepo := repository.NewAppSettingRepository(db)
 
 	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, actionLogRepo, mqttClient, bridgeService, sleepSchedule)
 	authHandler := handlerhttp.NewAuthHandler(authService)
 	scheduleHandler := handlerhttp.NewScheduleHandler(scheduleRepo, actionLogRepo, dblockerRepo)
 	actionLogHandler := handlerhttp.NewActionLogHandler(actionLogRepo)
-	detectorHandler := handlerhttp.NewDetectorHandler(detectorRepo, droneEventRepo)
+	detectorHandler := handlerhttp.NewDetectorHandlerWithSettings(detectorRepo, droneEventRepo, appSettingRepo)
 
 	// Public routes
 	r.POST("/api/auth/login", authHandler.Login)
