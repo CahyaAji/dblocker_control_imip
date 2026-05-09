@@ -88,8 +88,8 @@ services:
     volumes:
       - ${RECORD_DIR_HOST:-./recordings}:/recordings
       - ./cmd/vision/models:/models:ro
-    ports:
-      - "${VISION_PORT:-8090}:${VISION_PORT:-8090}"
+    # Vision is accessed internally via the main app proxy (/cam/* routes).
+    # No need to expose port 8090 externally.
 
   mosquitto:
     container_name: dblocker-mqtt
