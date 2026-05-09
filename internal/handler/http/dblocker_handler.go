@@ -339,6 +339,9 @@ func (h *DBlockerHandler) TurnOffAllDBlockerConfig(c *gin.Context) {
 		return
 	}
 
+	log.Printf("[BLOCKER] ALL-OFF sent → serial=%s topic=%s bitmask=0x%04X",
+		dblocker.SerialNumb, topic, bitmaskPayload)
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "All DBlocker config turned off successfully",
 		"data": gin.H{
@@ -528,6 +531,9 @@ func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish to mqtt"})
 		return
 	}
+
+	log.Printf("[BLOCKER] PRESET-ON sent → serial=%s topic=%s bitmask=0x%04X",
+		dblocker.SerialNumb, topic, bitmaskPayload)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Preset ON config applied successfully",

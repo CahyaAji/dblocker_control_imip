@@ -16,15 +16,44 @@ import (
 var (
 	detectionHoldSecs   int = 30
 	detectionHoldSecsMu sync.RWMutex
+
+	detectionAutoBlocker   bool = true
+	detectionAutoCamera    bool = true
+	detectionAutoMu        sync.RWMutex
 )
 
 type DetectorHandler struct {
-	DetectorRepo *repository.DetectorRepository
-	EventRepo    *repository.DroneEventRepository
+	DetectorRepo   *repository.DetectorRepository
+	EventRepo      *repository.DroneEventRepository
+	SettingRepo    *repository.AppSettingRepository
 }
 
 func NewDetectorHandler(detectorRepo *repository.DetectorRepository, eventRepo *repository.DroneEventRepository) *DetectorHandler {
 	return &DetectorHandler{DetectorRepo: detectorRepo, EventRepo: eventRepo}
+}
+
+func NewDetectorHandlerWithSettings(detectorRepo *repository.DetectorRepository, eventRepo *repository.DroneEventRepository, settingRepo *repository.AppSettingRepository) *DetectorHandler {
+	h := &DetectorHandler{DetectorRepo: detectorRepo, EventRepo: eventRepo, SettingRepo: settingRepo}
+	h.loadSettingsFromDB()
+	return h
+}
+
+// loadSettingsFromDB reads persisted settings at startup.
+func (h *DetectorHandler) loadSettingsFromDB() {
+	if h.SettingRepo == nil {
+		return
+	}
+	if v := h.SettingRepo.Get("detection.hold_seconds", ""); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 5 && n <= 3600 {
+			detectionHoldSecsMu.Lock()
+			detectionHoldSecs = n
+			detectionHoldSecsMu.Unlock()
+		}
+	}
+	detectionAutoMu.Lock()
+	detectionAutoBlocker = h.SettingRepo.Get("detection.auto_blocker", "true") != "false"
+	detectionAutoCamera = h.SettingRepo.Get("detection.auto_camera", "true") != "false"
+	detectionAutoMu.Unlock()
 }
 
 // --- Detector CRUD ---
@@ -197,29 +226,79 @@ func (h *DetectorHandler) UpdateDetectorStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "status updated", "detector_id": detector.ID, "status": input.Status})
 }
 
-// GetDetectionSettings returns the current blocker hold time after a detection.
+// GetDetectionSettings returns the current detection settings.
 func (h *DetectorHandler) GetDetectionSettings(c *gin.Context) {
 	detectionHoldSecsMu.RLock()
 	secs := detectionHoldSecs
 	detectionHoldSecsMu.RUnlock()
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"hold_seconds": secs}})
+	detectionAutoMu.RLock()
+	autoBlocker := detectionAutoBlocker
+	autoCamera := detectionAutoCamera
+	detectionAutoMu.RUnlock()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"hold_seconds":  secs,
+		"auto_blocker":  autoBlocker,
+		"auto_camera":   autoCamera,
+	}})
 }
 
-// UpdateDetectionSettings updates the blocker hold time after a detection.
+// UpdateDetectionSettings updates detection settings and persists them to the database.
 func (h *DetectorHandler) UpdateDetectionSettings(c *gin.Context) {
 	var input struct {
-		HoldSeconds int `json:"hold_seconds"`
+		HoldSeconds *int  `json:"hold_seconds"`
+		AutoBlocker *bool `json:"auto_blocker"`
+		AutoCamera  *bool `json:"auto_camera"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if input.HoldSeconds < 5 || input.HoldSeconds > 3600 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "hold_seconds must be between 5 and 3600"})
-		return
+	if input.HoldSeconds != nil {
+		if *input.HoldSeconds < 5 || *input.HoldSeconds > 3600 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "hold_seconds must be between 5 and 3600"})
+			return
+		}
+		detectionHoldSecsMu.Lock()
+		detectionHoldSecs = *input.HoldSeconds
+		detectionHoldSecsMu.Unlock()
+		if h.SettingRepo != nil {
+			_ = h.SettingRepo.Set("detection.hold_seconds", strconv.Itoa(*input.HoldSeconds))
+		}
 	}
-	detectionHoldSecsMu.Lock()
-	detectionHoldSecs = input.HoldSeconds
-	detectionHoldSecsMu.Unlock()
-	c.JSON(http.StatusOK, gin.H{"data": gin.H{"hold_seconds": input.HoldSeconds}})
+	if input.AutoBlocker != nil {
+		detectionAutoMu.Lock()
+		detectionAutoBlocker = *input.AutoBlocker
+		detectionAutoMu.Unlock()
+		if h.SettingRepo != nil {
+			v := "false"
+			if *input.AutoBlocker {
+				v = "true"
+			}
+			_ = h.SettingRepo.Set("detection.auto_blocker", v)
+		}
+	}
+	if input.AutoCamera != nil {
+		detectionAutoMu.Lock()
+		detectionAutoCamera = *input.AutoCamera
+		detectionAutoMu.Unlock()
+		if h.SettingRepo != nil {
+			v := "false"
+			if *input.AutoCamera {
+				v = "true"
+			}
+			_ = h.SettingRepo.Set("detection.auto_camera", v)
+		}
+	}
+	detectionHoldSecsMu.RLock()
+	secs := detectionHoldSecs
+	detectionHoldSecsMu.RUnlock()
+	detectionAutoMu.RLock()
+	autoBlocker := detectionAutoBlocker
+	autoCamera := detectionAutoCamera
+	detectionAutoMu.RUnlock()
+	c.JSON(http.StatusOK, gin.H{"data": gin.H{
+		"hold_seconds":  secs,
+		"auto_blocker":  autoBlocker,
+		"auto_camera":   autoCamera,
+	}})
 }
