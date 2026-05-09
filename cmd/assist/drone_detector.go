@@ -30,6 +30,15 @@ var (
 	holdTimers   = map[string]*time.Timer{}
 )
 
+// autoBlockerEnabled and autoCameraEnabled control whether detections trigger
+// dblocker activation and camera PTZ movement respectively.
+// When disabled, detections still appear in the live console.
+var (
+	autoBlockerEnabled   bool = true
+	autoCameraEnabled    bool = true
+	autoFlagsMu          sync.RWMutex
+)
+
 // mqttDetectPublisher is set by main() after MQTT connects.
 // If nil, MQTT publishing is skipped.
 var mqttDetectPublisher mqttPublisher
@@ -359,10 +368,18 @@ func parseDroneData(label string, data []byte) {
 	}
 
 	// LOGIC MARK: This triggers automatic blocker activation based on detection
-	go autoActivateBlockers(label, d)
+	autoFlagsMu.RLock()
+	blockerEnabled := autoBlockerEnabled
+	cameraEnabled := autoCameraEnabled
+	autoFlagsMu.RUnlock()
+	if blockerEnabled {
+		go autoActivateBlockers(label, d)
+	}
 
 	// LOGIC MARK: This rotates configured cameras toward the detected drone
-	go autoTrackCamera(label, d)
+	if cameraEnabled {
+		go autoTrackCamera(label, d)
+	}
 }
 
 func trimNull(s string) string {
@@ -490,11 +507,11 @@ type blockerRule struct {
 //
 // ============================================================
 var detectorRules = map[string][]blockerRule{
-	"Detector 1": {
+	"Detector1": {
 		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250006", "250007"}},
 		{headingMin: 270, headingMax: 360, blockerSerials: []string{"250001", "250002", "250003", "250004", "250005"}},
 	},
-	"Detector 2": {
+	"Detector2": {
 		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250008", "250009"}},
 		{headingMin: 90, headingMax: 180, blockerSerials: []string{"250009", "250010"}},
 	},
@@ -625,6 +642,8 @@ func applyBlockerPreset(label, serial string) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[%s] applyBlockerPreset: dblocker %q returned status %d", label, serial, resp.StatusCode)
+	} else {
+		log.Printf("[%s] ✅ PRESET-ON sent to dblocker serial=%q (id=%d)", label, serial, blockerID)
 	}
 }
 
@@ -641,19 +660,30 @@ func scheduleBlockerOff(label, serial string) {
 	defer holdTimersMu.Unlock()
 
 	if t, ok := holdTimers[serial]; ok {
-		// Detection came in before timer fired — reset the countdown.
-		t.Reset(dur)
-		return
+		// Detection came in before timer fired — stop the old timer and replace
+		// it with a fresh one so a racing AfterFunc callback won't fire twice.
+		t.Stop()
+		delete(holdTimers, serial)
 	}
 
-	// First detection: create a new timer.
-	holdTimers[serial] = time.AfterFunc(dur, func() {
-		log.Printf("[%s] hold timer expired for dblocker %q — turning off", label, serial)
-		go turnOffBlocker(label, serial)
+	// Create a new timer. Capture it in a local var so the callback can verify
+	// the map still points to *this* timer before triggering the off-action;
+	// otherwise we may turn the blocker off prematurely after a Reset race.
+	var newTimer *time.Timer
+	newTimer = time.AfterFunc(dur, func() {
 		holdTimersMu.Lock()
+		current, ok := holdTimers[serial]
+		if !ok || current != newTimer {
+			// A newer scheduling has replaced us; do nothing.
+			holdTimersMu.Unlock()
+			return
+		}
 		delete(holdTimers, serial)
 		holdTimersMu.Unlock()
+		log.Printf("[%s] hold timer expired for dblocker %q — turning off", label, serial)
+		go turnOffBlocker(label, serial)
 	})
+	holdTimers[serial] = newTimer
 }
 
 // turnOffBlocker calls the all-off endpoint for a dblocker by serial number.
@@ -683,6 +713,8 @@ func turnOffBlocker(label, serial string) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[%s] turnOffBlocker: dblocker %q returned status %d", label, serial, resp.StatusCode)
+	} else {
+		log.Printf("[%s] ✅ ALL-OFF sent to dblocker serial=%q (id=%d) after hold timer", label, serial, blockerID)
 	}
 }
 
@@ -690,8 +722,28 @@ func turnOffBlocker(label, serial string) {
 func startHoldSettingSync() {
 	go func() {
 		for {
-			fetchAndUpdateHoldSeconds()
 			time.Sleep(60 * time.Second)
+			fetchAndUpdateHoldSeconds()
+		}
+	}()
+}
+
+// startDetectionCacheCleanup periodically purges stale entries from
+// detectionCache to prevent unbounded memory growth from unique drone IDs
+// that are seen once and never again.
+func startDetectionCacheCleanup() {
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cutoff := time.Now().Add(-10 * time.Minute)
+			detectionCacheMu.Lock()
+			for id, e := range detectionCache {
+				if e.lastSavedAt.Before(cutoff) {
+					delete(detectionCache, id)
+				}
+			}
+			detectionCacheMu.Unlock()
 		}
 	}()
 }
@@ -712,9 +764,19 @@ func fetchAndUpdateHoldSeconds() {
 	}
 	defer resp.Body.Close()
 
+	// Only trust the response if the API call actually succeeded.
+	// Otherwise an error body could be decoded into zero-value (false) flags
+	// and silently disable auto-blocker / auto-camera.
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("warn: detector settings poll returned status %d, keeping previous flags", resp.StatusCode)
+		return
+	}
+
 	var result struct {
 		Data struct {
-			HoldSeconds int `json:"hold_seconds"`
+			HoldSeconds int  `json:"hold_seconds"`
+			AutoBlocker bool `json:"auto_blocker"`
+			AutoCamera  bool `json:"auto_camera"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -725,6 +787,10 @@ func fetchAndUpdateHoldSeconds() {
 		holdSeconds = result.Data.HoldSeconds
 		holdSecondsMu.Unlock()
 	}
+	autoFlagsMu.Lock()
+	autoBlockerEnabled = result.Data.AutoBlocker
+	autoCameraEnabled = result.Data.AutoCamera
+	autoFlagsMu.Unlock()
 }
 
 // calcBearing returns the bearing in degrees (0-360) from point A to point B.

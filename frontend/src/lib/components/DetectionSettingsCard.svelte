@@ -4,6 +4,8 @@
     import { API_BASE } from "../utils/api";
 
     let holdSeconds = $state(30);
+    let autoBlocker = $state(true);
+    let autoCamera = $state(true);
     let saving = $state(false);
     let error = $state("");
     let success = $state("");
@@ -14,6 +16,8 @@
             if (res.ok) {
                 const json = await res.json();
                 holdSeconds = json.data.hold_seconds;
+                autoBlocker = json.data.auto_blocker ?? true;
+                autoCamera = json.data.auto_camera ?? true;
             }
         } catch {
             error = "Failed to load detection settings";
@@ -28,7 +32,11 @@
             const res = await authFetch(`${API_BASE}/api/detectors/settings`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ hold_seconds: holdSeconds }),
+                body: JSON.stringify({
+                    hold_seconds: holdSeconds,
+                    auto_blocker: autoBlocker,
+                    auto_camera: autoCamera,
+                }),
             });
             if (res.ok) {
                 success = "Saved";
@@ -63,6 +71,34 @@
             <span class="value">{holdSeconds} s</span>
             <button class="step-btn" onclick={() => adjust(5)}>+</button>
         </div>
+    </div>
+
+    <div class="toggle-row">
+        <div class="label">
+            <span class="dot dot-blocker"></span>
+            Auto-activate blocker
+        </div>
+        <button
+            class="toggle-btn {autoBlocker ? 'on' : 'off'}"
+            onclick={() => (autoBlocker = !autoBlocker)}
+            aria-label="Toggle auto blocker"
+        >
+            <span class="toggle-thumb"></span>
+        </button>
+    </div>
+
+    <div class="toggle-row">
+        <div class="label">
+            <span class="dot dot-camera"></span>
+            Auto-move camera
+        </div>
+        <button
+            class="toggle-btn {autoCamera ? 'on' : 'off'}"
+            onclick={() => (autoCamera = !autoCamera)}
+            aria-label="Toggle auto camera"
+        >
+            <span class="toggle-thumb"></span>
+        </button>
     </div>
 
     <div class="footer">
@@ -101,6 +137,14 @@
         padding: 8px 0;
     }
 
+    .toggle-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-top: 1px solid color-mix(in srgb, var(--separator) 40%, transparent);
+    }
+
     .label {
         display: flex;
         align-items: center;
@@ -116,6 +160,38 @@
         border-radius: 50%;
         background: var(--accent-blue);
     }
+
+    .dot-blocker { background: #e74c3c; }
+    .dot-camera  { background: #f39c12; }
+
+    .toggle-btn {
+        position: relative;
+        width: 40px;
+        height: 22px;
+        border-radius: 999px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.2s;
+        flex-shrink: 0;
+        padding: 0;
+    }
+
+    .toggle-btn.on  { background: var(--accent-green, #27ae60); }
+    .toggle-btn.off { background: color-mix(in srgb, var(--separator) 80%, transparent); }
+
+    .toggle-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #fff;
+        transition: transform 0.2s;
+    }
+
+    .toggle-btn.on .toggle-thumb  { transform: translateX(18px); }
+    .toggle-btn.off .toggle-thumb { transform: translateX(0); }
 
     .stepper {
         display: flex;

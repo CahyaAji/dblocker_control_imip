@@ -37,8 +37,8 @@ var cameraHeightM float64 = 20
 //
 // ============================================================
 var cameraTrackRules = map[string][]int{
-	"Detector 1": {1},
-	"Detector 2": {2},
+	"Detector1": {1},
+	"Detector2": {2},
 }
 
 // northOffsets maps vision-server device ID → compass bearing (degrees) that
@@ -297,31 +297,33 @@ func startCameraRecord(label string, deviceID int) {
 		payload := map[string]any{"cam": camName, "duration": recordSeconds, "detect": camName == "normal"}
 		body, _ := json.Marshal(payload)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
 
-		req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
-		if err != nil {
-			log.Printf("[%s] camera_track: failed to build record request for device %d %s: %v", label, deviceID, camName, err)
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
+			req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+			if err != nil {
+				log.Printf("[%s] camera_track: failed to build record request for device %d %s: %v", label, deviceID, camName, err)
+				return
+			}
+			req.Header.Set("Content-Type", "application/json")
 
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("[%s] camera_track: record request failed for device %d %s: %v", label, deviceID, camName, err)
-			continue
-		}
-		resp.Body.Close()
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("[%s] camera_track: record request failed for device %d %s: %v", label, deviceID, camName, err)
+				return
+			}
+			defer resp.Body.Close()
 
-		switch resp.StatusCode {
-		case http.StatusOK:
-			log.Printf("[%s] camera_track: device %d %s recording started (%ds)", label, deviceID, camName, recordSeconds)
-		case http.StatusConflict:
-			// Already recording — no action needed.
-		default:
-			log.Printf("[%s] camera_track: device %d %s record returned HTTP %d", label, deviceID, camName, resp.StatusCode)
-		}
+			switch resp.StatusCode {
+			case http.StatusOK:
+				log.Printf("[%s] camera_track: device %d %s recording started (%ds)", label, deviceID, camName, recordSeconds)
+			case http.StatusConflict:
+				// Already recording — no action needed.
+			default:
+				log.Printf("[%s] camera_track: device %d %s record returned HTTP %d", label, deviceID, camName, resp.StatusCode)
+			}
+		}()
 	}
 }
 

@@ -103,9 +103,14 @@ func main() {
 		log.Printf("MQTT connected for drone detection live feed (%s)", mqttBroker)
 	}
 
+	// Fetch settings synchronously first so the initial state of
+	// auto_blocker/auto_camera is correct before any detection arrives.
+	fetchAndUpdateHoldSeconds()
+
 	// Start drone detector connections from database
 	startDetectorsFromDB()
 	startHoldSettingSync()
+	startDetectionCacheCleanup()
 
 	// Track which schedules already executed this minute to avoid duplicates.
 	// Key: "scheduleID:HH:MM"
