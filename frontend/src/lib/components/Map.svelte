@@ -233,6 +233,7 @@
             data: { type: "FeatureCollection", features: [] },
         });
 
+        // Add detector layers last so they are on top
         map.addLayer({
             id: DET_LAYER_GLOW_ID,
             type: "circle",
@@ -242,7 +243,7 @@
                 "circle-color": "rgba(0, 200, 255, 0.15)",
                 "circle-blur": 0.5,
             },
-        });
+        }, undefined);
 
         map.addLayer({
             id: DET_LAYER_BORDER_ID,
@@ -252,7 +253,7 @@
                 "circle-radius": 10,
                 "circle-color": "rgba(255, 255, 255, 0.95)",
             },
-        });
+        }, undefined);
 
         map.addLayer({
             id: DET_LAYER_CORE_ID,
@@ -267,7 +268,7 @@
                     "#666666",
                 ],
             },
-        });
+        }, undefined);
 
         map.addLayer({
             id: DET_LAYER_LABEL_ID,
