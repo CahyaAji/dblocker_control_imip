@@ -1,0 +1,27 @@
+# GPU override for Dell Precision 5860 (or any machine with an NVIDIA GPU).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+#
+# Requirements on the host:
+#   - NVIDIA driver (>=525 recommended for CUDA 12)
+#   - nvidia-container-toolkit  →  https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+#     (after installing: sudo systemctl restart docker)
+#
+# This file only overrides the `vision` service; everything else is unchanged.
+
+services:
+  vision:
+    build:
+      args:
+        USE_GPU: "true"
+    environment:
+      # Tell the vision process to activate the CUDA execution provider.
+      DETECT_DEVICE: cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

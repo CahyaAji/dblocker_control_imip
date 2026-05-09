@@ -81,8 +81,13 @@ services:
       MQTT_USERNAME: ${MQTT_USERNAME}
       MQTT_PASSWORD: ${MQTT_PASSWORD}
       RECORD_DIR: /recordings
+      DETECT_MODEL_PATH: ${DETECT_MODEL_PATH:-/models/yolov8n.onnx}
+      DETECT_CONF_THRESHOLD: ${DETECT_CONF_THRESHOLD:-0.35}
+      DETECT_IOU_THRESHOLD: ${DETECT_IOU_THRESHOLD:-0.45}
+      DETECT_JPEG_QUALITY: ${DETECT_JPEG_QUALITY:-75}
     volumes:
       - ${RECORD_DIR_HOST:-./recordings}:/recordings
+      - ./cmd/vision/models:/models:ro
     ports:
       - "${VISION_PORT:-8090}:${VISION_PORT:-8090}"
 
