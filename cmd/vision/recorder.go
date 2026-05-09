@@ -15,9 +15,17 @@ const maxRecordDuration = 10 * time.Minute
 // activeRecording holds state for an in-progress recording.
 type activeRecording struct {
 	cam       string // "normal" | "thermal"
+	detect    bool   // recording the YOLO-annotated stream
 	filename  string // basename only, e.g. "device1_normal_20260508_153045.mp4"
 	startedAt time.Time
 	cancel    context.CancelFunc
+}
+
+// frameSource is implemented by both StreamBroadcaster and DetectionBroadcaster.
+// It's the minimal interface the recorder needs to subscribe to a camera feed.
+type frameSource interface {
+	Subscribe() (uint64, <-chan []byte)
+	Unsubscribe(uint64)
 }
 
 // recorderMu and recorder are added to Device in camera.go.
@@ -25,8 +33,10 @@ type activeRecording struct {
 
 // RecordStart begins recording the chosen camera for this device.
 // duration is capped at maxRecordDuration; pass 0 to use the maximum.
+// If detect is true and cam == "normal", the recording captures the YOLO-
+// annotated MJPEG stream (the detector must be attached for this to work).
 // Files are written to recordDir.
-func (d *Device) RecordStart(cam string, duration time.Duration, recordDir string) error {
+func (d *Device) RecordStart(cam string, detect bool, duration time.Duration, recordDir string) error {
 	var camera *Camera
 	switch cam {
 	case "normal":
@@ -35,6 +45,21 @@ func (d *Device) RecordStart(cam string, duration time.Duration, recordDir strin
 		camera = d.ThermalCam
 	default:
 		return fmt.Errorf("unknown cam %q; use normal or thermal", cam)
+	}
+
+	// Detection is only meaningful for the normal cam and requires the detector.
+	var src frameSource
+	if detect {
+		if cam != "normal" {
+			return fmt.Errorf("detect recording is only available for the normal camera")
+		}
+		bc := camera.GetDetectBroadcaster()
+		if bc == nil {
+			return fmt.Errorf("detector not configured (set DETECT_MODEL_PATH)")
+		}
+		src = bc
+	} else {
+		src = camera.GetBroadcaster()
 	}
 
 	if duration <= 0 || duration > maxRecordDuration {
@@ -56,22 +81,27 @@ func (d *Device) RecordStart(cam string, duration time.Duration, recordDir strin
 	}
 
 	ts := time.Now()
-	filename := fmt.Sprintf("device%d_%s_%s.mp4", d.ID, cam, ts.Format("20060102_150405"))
+	suffix := ""
+	if detect {
+		suffix = "_detect"
+	}
+	filename := fmt.Sprintf("device%d_%s%s_%s.mp4", d.ID, cam, suffix, ts.Format("20060102_150405"))
 	outPath := filepath.Join(recordDir, filename)
 
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	d.recorder = &activeRecording{
 		cam:       cam,
+		detect:    detect,
 		filename:  filename,
 		startedAt: ts,
 		cancel:    cancel,
 	}
 
-	go d.runRecorder(ctx, cancel, camera, cam, outPath)
+	go d.runRecorder(ctx, cancel, src, cam, outPath)
 	return nil
 }
 
-func (d *Device) runRecorder(ctx context.Context, cancel context.CancelFunc, camera *Camera, cam, outPath string) {
+func (d *Device) runRecorder(ctx context.Context, cancel context.CancelFunc, src frameSource, cam, outPath string) {
 	defer cancel()
 	defer func() {
 		d.recorderMu.Lock()
@@ -79,8 +109,8 @@ func (d *Device) runRecorder(ctx context.Context, cancel context.CancelFunc, cam
 		d.recorderMu.Unlock()
 	}()
 
-	subID, frames := camera.GetBroadcaster().Subscribe()
-	defer camera.GetBroadcaster().Unsubscribe(subID)
+	subID, frames := src.Subscribe()
+	defer src.Unsubscribe(subID)
 
 	// Do NOT use exec.CommandContext — it sends SIGKILL which corrupts the MP4.
 	// Instead we close stdin to let FFmpeg finalize gracefully.
@@ -144,13 +174,13 @@ func (d *Device) RecordStop() error {
 }
 
 // RecordStatus returns a snapshot of the current recording state.
-func (d *Device) RecordStatus() (recording bool, cam, filename string, startedAt time.Time) {
+func (d *Device) RecordStatus() (recording bool, cam, filename string, detect bool, startedAt time.Time) {
 	d.recorderMu.Lock()
 	defer d.recorderMu.Unlock()
 	if d.recorder == nil {
-		return false, "", "", time.Time{}
+		return false, "", "", false, time.Time{}
 	}
-	return true, d.recorder.cam, d.recorder.filename, d.recorder.startedAt
+	return true, d.recorder.cam, d.recorder.filename, d.recorder.detect, d.recorder.startedAt
 }
 
 // checkRecordDir verifies that dir exists, is a directory, and is writable.

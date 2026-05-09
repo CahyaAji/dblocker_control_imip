@@ -20,6 +20,23 @@ func main() {
 	appPort := getEnv("APP_PORT", "8090")
 	recordDir := getEnv("RECORD_DIR", "/recordings")
 
+	// Optional: YOLO detector for normal cameras.
+	modelPath := os.Getenv("DETECT_MODEL_PATH")
+	if modelPath != "" {
+		confTh := envFloat("DETECT_CONF_THRESHOLD", 0.35)
+		iouTh := envFloat("DETECT_IOU_THRESHOLD", 0.45)
+		jpegQ, _ := strconv.Atoi(getEnv("DETECT_JPEG_QUALITY", "75"))
+		detector, err := NewDetector(modelPath, CocoClasses, float32(confTh), float32(iouTh))
+		if err != nil {
+			log.Printf("warn: failed to load detector model %q: %v (detection disabled)", modelPath, err)
+		} else {
+			log.Printf("Detector loaded: %s (conf=%.2f, iou=%.2f)", modelPath, confTh, iouTh)
+			for _, dev := range devices {
+				dev.NormalCam.AttachDetector(detector, jpegQ)
+			}
+		}
+	}
+
 	// Connect to MQTT for camera heading publishing (best-effort).
 	mqttBroker := getEnv("MQTT_BROKER", "tcp://mosquitto:1883")
 	mqttUser := os.Getenv("MQTT_USERNAME")
@@ -41,6 +58,7 @@ func main() {
 		cam.GET("/devices", h.ListDevices)
 		cam.GET("/devices/:id/rtsp", h.GetRTSPURLs)
 		cam.GET("/devices/:id/stream/:cam", h.StreamMJPEG)
+		cam.GET("/devices/:id/stream/:cam/detect", h.StreamMJPEGDetect)
 		cam.GET("/devices/:id/snapshot", h.Snapshot)
 		// cam.POST("/devices/:id/ptz", h.PTZControl)
 		// cam.POST("/devices/:id/ptz/stop", h.PTZStop)
