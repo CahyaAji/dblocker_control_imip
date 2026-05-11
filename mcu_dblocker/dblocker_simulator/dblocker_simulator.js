@@ -13,7 +13,7 @@ const mqtt = require("mqtt");
 // These are the defaults. All can be overridden via CLI args:
 //   node dblocker_simulator.js --serial 250003 --mqtt-host 10.0.0.1 --mqtt-pass secret
 // ============================================================
-const SERIAL_NUMB = getArg("--serial",    "250002"); // ⚙️ Device serial number (must match DB)
+const SERIAL_NUMB = getArg("--serial",    "250001"); // ⚙️ Device serial number (must match DB)
 
 const MQTT_HOST   = getArg("--mqtt-host", "localhost");  // ⚙️ MQTT broker host (Docker exposes to host)
 const MQTT_PORT   = parseInt(getArg("--mqtt-port", "1883"), 10); // ⚙️ MQTT broker port
