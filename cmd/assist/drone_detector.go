@@ -34,9 +34,9 @@ var (
 // dblocker activation and camera PTZ movement respectively.
 // When disabled, detections still appear in the live console.
 var (
-	autoBlockerEnabled   bool = true
-	autoCameraEnabled    bool = true
-	autoFlagsMu          sync.RWMutex
+	autoBlockerEnabled bool = true
+	autoCameraEnabled  bool = true
+	autoFlagsMu        sync.RWMutex
 )
 
 // mqttDetectPublisher is set by main() after MQTT connects.
@@ -680,10 +680,42 @@ func scheduleBlockerOff(label, serial string) {
 		}
 		delete(holdTimers, serial)
 		holdTimersMu.Unlock()
-		log.Printf("[%s] hold timer expired for dblocker %q — turning off", label, serial)
-		go turnOffBlocker(label, serial)
+		log.Printf("[%s] hold timer expired for dblocker %q — restoring default config", label, serial)
+		go applyBlockerDefault(label, serial)
 	})
 	holdTimers[serial] = newTimer
+}
+
+// applyBlockerDefault resolves a dblocker serial number to its ID and calls the default-ON endpoint.
+func applyBlockerDefault(label, serial string) {
+	blockerID, ok := resolveBlockerID(label, serial)
+	if !ok {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/dblockers/config/default/%d", backendURL, blockerID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		log.Printf("[%s] applyBlockerDefault: failed to create request for dblocker %q: %v", label, serial, err)
+		return
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("[%s] applyBlockerDefault: request failed for dblocker %q: %v", label, serial, err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[%s] applyBlockerDefault: dblocker %q returned status %d", label, serial, resp.StatusCode)
+	} else {
+		log.Printf("[%s] ✅ DEFAULT-ON sent to dblocker serial=%q (id=%d) after hold timer", label, serial, blockerID)
+	}
 }
 
 // turnOffBlocker calls the all-off endpoint for a dblocker by serial number.
