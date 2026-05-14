@@ -53,12 +53,17 @@
     }
     loading = true;
     try {
-      const res = await fetch("/cam/devices");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch("/cam/devices", { signal: AbortSignal.timeout(8000) });
+      if (!res.ok) throw new Error(`Vision server error (HTTP ${res.status})`);
       const json = await res.json();
       devices = json.data ?? [];
+      if (devices.length === 0) error = "No devices configured on the vision server.";
     } catch (e: unknown) {
-      error = e instanceof Error ? e.message : "Failed to load devices";
+      if (e instanceof DOMException && e.name === "TimeoutError") {
+        error = "Vision server is unavailable or not responding.";
+      } else {
+        error = e instanceof Error ? e.message : "Failed to load devices";
+      }
     } finally {
       loading = false;
     }

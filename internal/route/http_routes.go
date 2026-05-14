@@ -1,16 +1,21 @@
 package route
 
 import (
+	"context"
 	handlerhttp "dblocker_control/internal/handler/http"
 	"dblocker_control/internal/infrastructure/database/repository"
 	"dblocker_control/internal/infrastructure/mqtt"
 	"dblocker_control/internal/middleware"
 	"dblocker_control/internal/service"
+	"encoding/json"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -108,6 +113,21 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 		panic("invalid VISION_URL: " + err.Error())
 	}
 	visionProxy := httputil.NewSingleHostReverseProxy(visionTarget)
+	// Use a transport with a short dial timeout so a down vision server fails
+	// fast instead of holding the connection for ~90 s (which would starve the
+	// SSE /events stream and make the dblocker list appear empty).
+	visionProxy.Transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 5 * time.Second}).DialContext(ctx, network, addr)
+		},
+		ResponseHeaderTimeout: 10 * time.Second,
+	}
+	visionProxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		log.Printf("vision proxy error: %v", err)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(map[string]string{"error": "vision server unavailable"})
+	}
 	r.Any("/cam/*path", func(c *gin.Context) {
 		visionProxy.ServeHTTP(c.Writer, c.Request)
 	})
