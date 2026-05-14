@@ -1,7 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzc5NDc5MDAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.9D5pzHyNnrGwPU8kRuEaRUjrpWYvk5JtWOh7gMBO6wQ
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzkzNjkxMDcsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.skcfSgWnDoZtZNaDmzWVNjmsnPDKET7AuOUGJsITqtg
 
 ### 1. Register DBlocker
 POST {{host}}/api/dblockers
@@ -176,4 +176,25 @@ Authorization: Bearer {{token}}
 
 ### 9. Apply Preset ON (publish saved preset config to device via MQTT)
 GET {{host}}/api/dblockers/config/preset/6
+Authorization: Bearer {{token}}
+
+### 10. Save Default Config (store default state for a dblocker)
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 6,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+### 11. Apply Default ON (publish saved default config to device via MQTT)
+GET {{host}}/api/dblockers/config/default/6
 Authorization: Bearer {{token}}
