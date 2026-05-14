@@ -17,6 +17,17 @@
   let activeMsgTab = $state<"receiver" | "status">("receiver");
   let showMsgPanel = $state(false);
   let showUserMgmt = $state(false);
+  let isMobile = $state(false);
+
+  $effect(() => {
+    if (typeof window === "undefined") return;
+    const checkMobile = () => {
+      isMobile = window.innerWidth <= 768;
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  });
 
   const MSG_PANEL_SHORTCUT_LABEL = "Ctrl/Cmd+Alt+Shift+M";
 
@@ -127,9 +138,11 @@
         {/if}
 
         <aside
-          style={$settings.sidebarExpanded
-            ? `width: ${$settings.sidebarWidth}px`
-            : "width: 50px"}
+          style={isMobile
+            ? undefined
+            : $settings.sidebarExpanded
+              ? `width: ${$settings.sidebarWidth}px`
+              : "width: 50px"}
           class:resizing={isResizing}
         >
           <div class="sidebar-header">
@@ -138,7 +151,7 @@
               onclick={toggleSidebar}
               aria-label="Toggle Sidebar">☰</button
             >
-            {#if $settings.sidebarExpanded}
+            {#if $settings.sidebarExpanded || isMobile}
               <div class="header-actions">
                 {#if $authStore.user?.is_admin}
                   <button
@@ -334,7 +347,7 @@
             {/if}
           </div>
           <div class="sidebar-content">
-            {#if $settings.sidebarExpanded}
+            {#if $settings.sidebarExpanded || isMobile}
               {#if showUserMgmt && $authStore.user?.is_admin}
                 <UserManagement />
               {:else}
@@ -408,6 +421,14 @@
     left: 14px;
     bottom: 14px;
     max-height: min(75vh, 480px);
+  }
+
+  @media (max-width: 768px) {
+    .msg-panel {
+      top: 14px;
+      bottom: auto;
+      max-height: min(60vh, 400px);
+    }
   }
 
   .msg-tabs {
@@ -611,5 +632,50 @@
       var(--accent-blue) 50%,
       transparent 100%
     );
+  }
+
+  /* ── Mobile layout ─────────────────────────────────── */
+  @media (max-width: 768px) {
+    main {
+      flex-direction: column;
+    }
+
+    .map-area {
+      flex: none;
+      height: 50vh;
+    }
+
+    .sidebar-wrapper {
+      flex: 1;
+      min-height: 0;
+      flex-direction: column;
+    }
+
+    .resizer {
+      display: none;
+    }
+
+    aside {
+      width: 100% !important;
+      height: 100%;
+      border-left: none;
+      border-top: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+      box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.15);
+      transition: none;
+    }
+
+    .sidebar-header {
+      padding: 8px 10px;
+    }
+
+    .header-actions {
+      gap: 4px;
+    }
+
+    .sidebar-content {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 4px 4px 20px;
+    }
   }
 </style>
