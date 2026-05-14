@@ -112,15 +112,16 @@ func (h *DBlockerHandler) UpdateDBlocker(c *gin.Context) {
 
 	// Use a patch struct with pointer fields to distinguish omitted vs zero values
 	type patchDBlocker struct {
-		Name         *string                  `json:"name"`
-		SerialNumb   *string                  `json:"serial_numb"`
-		IP           *string                  `json:"ip"`
-		Latitude     *float64                 `json:"latitude"`
-		Longitude    *float64                 `json:"longitude"`
-		Desc         *string                  `json:"desc"`
-		AngleStart   *int                     `json:"angle_start"`
-		Config       *[]models.DBlockerConfig `json:"config"`
-		PresetConfig *[]models.DBlockerConfig `json:"preset_config"`
+		Name          *string                  `json:"name"`
+		SerialNumb    *string                  `json:"serial_numb"`
+		IP            *string                  `json:"ip"`
+		Latitude      *float64                 `json:"latitude"`
+		Longitude     *float64                 `json:"longitude"`
+		Desc          *string                  `json:"desc"`
+		AngleStart    *int                     `json:"angle_start"`
+		Config        *[]models.DBlockerConfig `json:"config"`
+		PresetConfig  *[]models.DBlockerConfig `json:"preset_config"`
+		DefaultConfig *[]models.DBlockerConfig `json:"default_config"`
 	}
 	var patch patchDBlocker
 	if err := c.ShouldBindJSON(&patch); err != nil {
@@ -156,6 +157,9 @@ func (h *DBlockerHandler) UpdateDBlocker(c *gin.Context) {
 	}
 	if patch.PresetConfig != nil {
 		input.PresetConfig = *patch.PresetConfig
+	}
+	if patch.DefaultConfig != nil {
+		input.DefaultConfig = *patch.DefaultConfig
 	}
 
 	if err := h.Repo.Update(&input); err != nil {
@@ -731,6 +735,111 @@ func (h *DBlockerHandler) UpdatePresetConfig(c *gin.Context) {
 		"message": "Preset config saved successfully",
 		"data":    input,
 	})
+}
+
+func (h *DBlockerHandler) UpdateDefaultConfig(c *gin.Context) {
+	var input models.DBlockerConfigUpdate
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if _, err := h.Repo.FindByID(input.ID); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	if err := h.Repo.UpdateDefaultConfig(input.ID, input.Config[:]); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Default config saved successfully",
+		"data":    input,
+	})
+}
+
+func (h *DBlockerHandler) DefaultOnDBlockerConfig(c *gin.Context) {
+	idParam := c.Param("id")
+
+	id, err := strconv.ParseUint(idParam, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID format"})
+		return
+	}
+
+	dblocker, err := h.Repo.FindByID(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	// Block default ON if device is overheating
+	if h.Bridge != nil && h.Bridge.FanControl() != nil && h.Bridge.FanControl().IsOverheating(dblocker.SerialNumb) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "device temperature exceeds safe limit, cannot turn on sectors"})
+		return
+	}
+
+	if len(dblocker.DefaultConfig) != 6 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "default config not set for this dblocker"})
+		return
+	}
+
+	if err := h.Repo.UpdateConfig(uint(id), dblocker.DefaultConfig); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	topic := fmt.Sprintf("dbl/%s/cmd", dblocker.SerialNumb)
+
+	fanM, fanS := h.fanState(dblocker.SerialNumb, dblocker.DefaultConfig)
+	bitmaskPayload, err := service.DBlockerConfigToBitmask(
+		dblocker.DefaultConfig,
+		fanM,
+		fanS,
+	)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	payload := []byte{
+		byte(bitmaskPayload >> 8),
+		byte(bitmaskPayload),
+	}
+
+	if err := h.MqttClient.Publish(topic, 1, true, payload); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to publish to mqtt"})
+		return
+	}
+
+	log.Printf("[BLOCKER] DEFAULT-ON sent → serial=%s topic=%s bitmask=0x%04X",
+		dblocker.SerialNumb, topic, bitmaskPayload)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Default ON config applied successfully",
+		"data": gin.H{
+			"id":     uint(id),
+			"config": dblocker.DefaultConfig,
+		},
+	})
+
+	// Log action
+	user, _ := c.Get("user")
+	username := "unknown"
+	if u, ok := user.(*models.User); ok {
+		username = u.Username
+	}
+	if h.LogRepo != nil {
+		_ = h.LogRepo.Create(&models.ActionLog{
+			Username:     username,
+			Action:       "default_on",
+			DBlockerID:   uint(id),
+			DBlockerName: dblocker.Name,
+			Config:       dblocker.DefaultConfig,
+		})
+	}
 }
 
 // GetSleepSchedule returns the current global sleep/wake schedule settings.

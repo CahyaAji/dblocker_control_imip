@@ -45,3 +45,7 @@ func (r *DBlockerRepository) UpdateConfig(id uint, config []models.DBlockerConfi
 func (r *DBlockerRepository) UpdatePresetConfig(id uint, presetConfig []models.DBlockerConfig) error {
 	return r.DB.Model(&models.DBlocker{ID: id}).Select("PresetConfig").Updates(models.DBlocker{PresetConfig: presetConfig}).Error
 }
+
+func (r *DBlockerRepository) UpdateDefaultConfig(id uint, defaultConfig []models.DBlockerConfig) error {
+	return r.DB.Model(&models.DBlocker{ID: id}).Select("DefaultConfig").Updates(models.DBlocker{DefaultConfig: defaultConfig}).Error
+}

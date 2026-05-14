@@ -14,8 +14,9 @@ type DBlocker struct {
 	Lng          float64          `json:"longitude" binding:"required"`
 	Desc         string           `json:"desc"`
 	AngleStart   int              `json:"angle_start" default:"0"`
-	Config       []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config"`
-	PresetConfig []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"preset_config"`
+	Config        []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"config"`
+	PresetConfig  []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"preset_config"`
+	DefaultConfig []DBlockerConfig `gorm:"serializer:json;type:jsonb" json:"default_config"`
 }
 
 type DBlockerConfigUpdate struct {
