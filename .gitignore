@@ -30,3 +30,4 @@ mosquitto.log
 mosquitto/config/passwordfile
 other/
 recordings/
+build/
