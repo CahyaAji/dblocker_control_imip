@@ -3,7 +3,7 @@
     import DblockerCardActions from "./DblockerCardActions.svelte";
     import DblockerSectorGrid from "./DblockerSectorGrid.svelte";
     import type { DBlocker, DBlockerConfig, SectorCurrents } from "../store/dblockerStore";
-    import { updateDBlockerConfig, turnOffAll, presetOn, sleepDBlocker, rebootDBlocker, wakeDBlocker, expandedDblockerId } from "../store/dblockerStore";
+    import { updateDBlockerConfig, turnOffAll, presetOn, defaultOn, sleepDBlocker, rebootDBlocker, wakeDBlocker, expandedDblockerId } from "../store/dblockerStore";
     import { bridgeStore, subscribeBridge, unsubscribeBridge } from "../store/bridgeStore";
     import { API_BASE } from "../utils/api";
     import { tempLimitsStore } from "../store/configStore";
@@ -204,6 +204,10 @@
         await presetOn(dblocker.id);
     }
 
+    async function handleDefaultOn() {
+        await defaultOn(dblocker.id);
+    }
+
     onMount(() => {
         subscribeBridge();
         pollMonitorStatus();
@@ -272,14 +276,15 @@
 
     <DblockerCardActions
         {isExpanded}
-        {canReadLastState}
         {showAdvancedActions}
         disabled={!isOnline || isOverheating}
         presetDisabled={!isOnline || slaveConnected === false || isOverheating}
+        defaultDisabled={!isOnline || slaveConnected === false || isOverheating}
         hasPreset={Array.isArray(dblocker.preset_config) && dblocker.preset_config.length === 6}
-        onReadLastState={reloadFromLatest}
+        hasDefault={Array.isArray(dblocker.default_config) && dblocker.default_config.length === 6}
         onApply={applyConfig}
         onPresetOn={handlePresetOn}
+        onDefaultOn={handleDefaultOn}
         onOffAll={handleOffAll}
         onToggleAdvanced={toggleAdvanced}
         onToggleExpanded={toggleExpanded}

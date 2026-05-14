@@ -23,6 +23,7 @@ export interface DBlocker {
     angle_start: number;
     config: DBlockerConfig[];
     preset_config: DBlockerConfig[] | null;
+    default_config: DBlockerConfig[] | null;
 }
 
 // --- STORE ---
@@ -108,6 +109,17 @@ export async function presetOn(blockerId: number) {
     } catch (err) {
         console.error('Failed to apply preset ON:', err);
         alert('Failed to apply preset ON. Check connection.');
+    }
+}
+
+export async function defaultOn(blockerId: number) {
+    try {
+        const res = await authFetch(`${API_BASE}/api/dblockers/config/default/${blockerId}`);
+        if (!res.ok) throw new Error('Failed to apply default ON');
+        await fetchDBlockers();
+    } catch (err) {
+        console.error('Failed to apply default ON:', err);
+        alert('Failed to apply default ON. Check connection.');
     }
 }
 

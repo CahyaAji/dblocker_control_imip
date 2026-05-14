@@ -2,14 +2,15 @@
     import { slide } from "svelte/transition";
 
     export let isExpanded = false;
-    export let canReadLastState = false;
     export let showAdvancedActions = false;
     export let hasPreset = false;
+    export let hasDefault = false;
     export let disabled = false;
     export let presetDisabled = false;
-    export let onReadLastState: () => void;
+    export let defaultDisabled = false;
     export let onApply: () => void;
     export let onPresetOn: () => void;
+    export let onDefaultOn: () => void;
     export let onOffAll: () => void;
     export let onToggleAdvanced: () => void;
     export let onToggleExpanded: () => void;
@@ -19,12 +20,12 @@
     {#if isExpanded}
         <div class="action-group" transition:slide={{ duration: 300 }}>
             <button
-                class="reload-btn"
+                class="detail-btn"
                 type="button"
-                disabled={!canReadLastState}
-                on:click={onReadLastState}
+                disabled={defaultDisabled || !hasDefault}
+                on:click={onDefaultOn}
             >
-                Read Last State
+                Default ON
             </button>
             <button class="apply-btn" type="button" disabled={disabled} on:click={onApply}>
                 Apply
@@ -95,7 +96,6 @@
 
     .detail-btn,
     .apply-btn,
-    .reload-btn,
     .advance-btn {
         width: 100%;
         border-radius: 10px;
@@ -112,7 +112,6 @@
     }
 
     .detail-btn,
-    .reload-btn,
     .advance-btn {
         border: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
         background: color-mix(
@@ -124,7 +123,6 @@
     }
 
     .detail-btn:hover,
-    .reload-btn:not(:disabled):hover,
     .advance-btn:hover {
         background: color-mix(
             in srgb,
@@ -140,7 +138,6 @@
 
     .detail-btn:active,
     .apply-btn:active,
-    .reload-btn:not(:disabled):active,
     .advance-btn:active {
         transform: translateY(1px) scale(0.985);
         box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.22);
@@ -166,13 +163,7 @@
         border-color: color-mix(in srgb, var(--accent-green) 70%, transparent);
     }
 
-    .reload-btn:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-
-    .detail-btn:disabled {
-        opacity: 0.5;
+    .detail-btn:disabled {        opacity: 0.5;
         cursor: not-allowed;
     }
 </style>
