@@ -114,7 +114,7 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 3. Get DBlocker by ID
-GET {{host}}/api/dblockers/13
+GET {{host}}/api/dblockers/6
 Authorization: Bearer {{token}}
 
 ### 4. Update DBlocker by ID

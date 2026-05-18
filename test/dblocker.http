@@ -158,8 +158,8 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "angle_start": 10,
-    "ip": "localhost"
+    "angle_start": 0,
+    "ip": "10.88.81.2"
 }
 
 
