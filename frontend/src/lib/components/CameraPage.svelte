@@ -141,20 +141,17 @@
   const stopZoom = () => sendZoom(0);
 
   // ── Wiper ─────────────────────────────────────────────────────────────────
-  let wiperOn = $state(false);
   let wiperLoading = $state(false);
 
-  const toggleWiper = async () => {
+  const triggerWiper = async () => {
     if (!focusedDevice || wiperLoading) return;
-    const newStatus = wiperOn ? "off" : "on";
     wiperLoading = true;
     try {
-      const res = await fetch(`/cam/devices/${focusedDevice.id}/wiper`, {
+      await fetch(`/cam/devices/${focusedDevice.id}/wiper`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({ status: "on" }),
       });
-      if (res.ok) wiperOn = !wiperOn;
     } catch {
       // ignore
     } finally {
@@ -452,13 +449,12 @@
             <button
               type="button"
               class="wiper-btn"
-              class:wiper-on={wiperOn}
-              onclick={toggleWiper}
+              onclick={triggerWiper}
               disabled={wiperLoading}
-              aria-label="Toggle wiper"
+              aria-label="Activate wiper"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22V12"/><path d="M5 7a7 7 0 0 1 14 0"/><path d="M5 7l7 5 7-5"/></svg>
-              {wiperOn ? "Wiper ON" : "Wiper OFF"}
+              {wiperLoading ? "Wiping…" : "Wiper"}
             </button>
           </div>
 
@@ -975,12 +971,6 @@
     color: var(--text-primary);
     background: color-mix(in srgb, var(--accent-cyan) 14%, var(--bg-elevated) 86%);
     border-color: color-mix(in srgb, var(--accent-cyan) 50%, transparent);
-  }
-
-  .wiper-btn.wiper-on {
-    background: color-mix(in srgb, #2980b9 22%, var(--bg-elevated) 78%);
-    border-color: color-mix(in srgb, #2980b9 60%, transparent);
-    color: #5dade2;
   }
 
   .wiper-btn:disabled {
