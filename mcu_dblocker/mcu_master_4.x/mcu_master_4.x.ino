@@ -32,9 +32,9 @@ uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
 uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 // Controller & Network Config ========================
-const char controller_id[] = "250009";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x19, 0x09 };
-IPAddress ip(10, 88, 81, 10);
+const char controller_id[] = "250008";
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x18, 0x08 };
+IPAddress ip(10, 88, 81, 9);
 IPAddress gateway(10, 88, 81, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress myDns(8, 8, 8, 8);
@@ -54,7 +54,7 @@ long otaExpectedSize = 0; // The failsafe byte counter
 // master is on right bit, slave is on left bit.
 // Example: 0b00000000000110 means master pins 1 and 2 are ON, slave pins are all OFF.
 // Example : 0b00000000000000 means all pins OFF, 0b11111111111111 means all pins ON, 0b10000000000000 means only slave pin 7 is ON.
-const uint16_t DEFAULT_PIN_MASK = 0b10000000000000; 
+const uint16_t DEFAULT_PIN_MASK = 0b00000001000000;
 
 // MQTT Config
 IPAddress mqtt_broker(10, 88, 81, 16);
