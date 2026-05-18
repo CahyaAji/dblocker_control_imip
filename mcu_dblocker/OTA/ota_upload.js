@@ -3,7 +3,7 @@ const net = require('net');
 const fs = require('fs');
 
 // --- CONFIGURATION ---
-const TARGET_IP = '10.88.81.10'; // Updated to your new IP
+const TARGET_IP = '10.88.81.9'; // Updated to your new IP
 const UDP_PORT = 51515;
 const TCP_PORT = 8080;
 const UDP_SECRET = 'p!ml_3rUc35';
