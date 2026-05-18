@@ -1,0 +1,114 @@
+# Deployment compose file — uses pre-built images (no source code needed on target).
+# On source machine: run scripts/export-images.sh to build & export images.
+# On target machine: run scripts/load-images.sh, then: docker compose -f docker-compose.deploy.yml up -d
+
+services:
+  app:
+    container_name: dblocker-app
+    image: dblocker-app:latest
+    restart: always
+    depends_on:
+      - postgres
+      - mosquitto
+    environment:
+      APP_PORT: ${APP_PORT:-8080}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      DB_HOST: ${DB_HOST:-postgres}
+      DB_PORT: ${DB_PORT:-5432}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
+      DB_TIMEZONE: ${DB_TIMEZONE:-UTC}
+      GIN_MODE: release
+      JWT_SECRET: ${JWT_SECRET}
+      API_KEY: ${API_KEY}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+    ports:
+      - "8080:8080"
+
+  assist:
+    container_name: dblocker-assist-app
+    image: dblocker-assist-app:latest
+    restart: always
+    depends_on:
+      - app
+      - mosquitto
+    environment:
+      API_KEY: ${API_KEY}
+      BACKEND_URL: http://dblocker-app:8080
+      DRONE_DETECTORS: ${DRONE_DETECTORS:-}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      VISION_URL: http://dblocker-vision:8090
+      DRONE_RANGE_FALLBACK: ${DRONE_RANGE_FALLBACK:-1000}
+      CAMERA_HEIGHT: ${CAMERA_HEIGHT:-20}
+      DEVICE_1_NORTH_OFFSET: ${DEVICE_1_NORTH_OFFSET:-0}
+      DEVICE_2_NORTH_OFFSET: ${DEVICE_2_NORTH_OFFSET:-0}
+
+  vision:
+    container_name: dblocker-vision
+    image: dblocker-vision:latest
+    restart: always
+    environment:
+      APP_PORT: ${VISION_PORT:-8090}
+      GIN_MODE: release
+      CAMERA_USERNAME: ${CAMERA_USERNAME}
+      CAMERA_PASSWORD: ${CAMERA_PASSWORD}
+      DEVICE_1_NAME: ${DEVICE_1_NAME:-Device 1}
+      DEVICE_1_NORMAL_HOST: ${DEVICE_1_NORMAL_HOST}
+      DEVICE_1_THERMAL_HOST: ${DEVICE_1_THERMAL_HOST}
+      DEVICE_1_THERMAL_MAIN_STREAM: ${DEVICE_1_THERMAL_MAIN_STREAM:-false}
+      DEVICE_1_PANTILT_HOST: ${DEVICE_1_PANTILT_HOST}
+      DEVICE_1_ZOOM_HOST: ${DEVICE_1_ZOOM_HOST}
+      DEVICE_1_LAT: ${DEVICE_1_LAT:-0}
+      DEVICE_1_LNG: ${DEVICE_1_LNG:-0}
+      DEVICE_2_NAME: ${DEVICE_2_NAME:-Device 2}
+      DEVICE_2_NORMAL_HOST: ${DEVICE_2_NORMAL_HOST}
+      DEVICE_2_THERMAL_HOST: ${DEVICE_2_THERMAL_HOST}
+      DEVICE_2_THERMAL_MAIN_STREAM: ${DEVICE_2_THERMAL_MAIN_STREAM:-false}
+      DEVICE_2_PANTILT_HOST: ${DEVICE_2_PANTILT_HOST}
+      DEVICE_2_ZOOM_HOST: ${DEVICE_2_ZOOM_HOST}
+      DEVICE_2_LAT: ${DEVICE_2_LAT:-0}
+      DEVICE_2_LNG: ${DEVICE_2_LNG:-0}
+      MQTT_BROKER: ${MQTT_BROKER:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-DBL0KER}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      RECORD_DIR: /recordings
+      DETECT_MODEL_PATH: ${DETECT_MODEL_PATH:-/models/yolov8n.onnx}
+      DETECT_CONF_THRESHOLD: ${DETECT_CONF_THRESHOLD:-0.35}
+      DETECT_IOU_THRESHOLD: ${DETECT_IOU_THRESHOLD:-0.45}
+      DETECT_JPEG_QUALITY: ${DETECT_JPEG_QUALITY:-75}
+    volumes:
+      - ${RECORD_DIR_HOST:-./recordings}:/recordings
+      - ./models:/models:ro
+
+  mosquitto:
+    container_name: dblocker-mqtt
+    image: eclipse-mosquitto:2
+    restart: always
+    ports:
+      - "${MQTT_PUBLIC_PORT:-1883}:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+
+  postgres:
+    container_name: dblocker-postgres
+    image: postgres:17
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports: []
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
