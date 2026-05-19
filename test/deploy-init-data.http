@@ -1,0 +1,171 @@
+# @host = http://10.88.81.16:8080
+@host = http://localhost:8080
+
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzkwNzU1NjYsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.MjRDGU5-7TNuawh9Lvl_pOGK3tpoiIH6Pz45Hcxzyto
+
+
+### 0. Login (get token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+    "username": "aji",
+    "password": "zxcjkl01"
+}
+
+### 1. Get All DBlockers
+GET {{host}}/api/dblockers
+Authorization: Bearer {{token}}
+
+### 2. Get DBlocker by ID
+GET {{host}}/api/dblockers/6
+Authorization: Bearer {{token}}
+
+
+##########################################
+### 3a. Update DBlocker Default Config
+#### blocker no 2, 6, 7, 8
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+### 3b. Update DBlocker Default Config
+#### blocker no 1
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false}
+    ]
+}
+
+### 3c. Update DBlocker Default Config
+#### blocker no 3
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false}
+    ]
+}
+
+### 3d. Update DBlocker Default Config
+#### blocker no 4
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false}
+    ]
+}
+
+### 3e. Update DBlocker Default Config
+#### blocker no 5
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+### 3f. Update DBlocker Default Config
+#### blocker no 9, 10
+PUT {{host}}/api/dblockers/default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+##################################################
+
+### 4. Save Preset Config (store preset ON state for a dblocker)
+#### blocker no 2, 6, 7, 8
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+
+### 4b. Save Preset Config (store preset ON state for a dblocker)
+#### blocker no 1
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 11,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true}
+    ]
+}
