@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	internalmqtt "dblocker_control/internal/infrastructure/mqtt"
@@ -290,57 +291,61 @@ type DetectorEntry struct {
 	Lng  float64 `json:"longitude"`
 }
 
+// startedDetectors tracks which detector IDs have already had a goroutine launched,
+// so the polling loop never starts a second connection for the same detector.
+var (
+	startedDetectorsMu sync.Mutex
+	startedDetectors   = map[uint]bool{}
+)
+
 func startDetectorsFromDB() {
-	// Retry until the backend is reachable (handles assist starting before app is ready).
-	var result struct {
-		Data []DetectorEntry `json:"data"`
+	go func() {
+		for {
+			fetchAndStartNewDetectors()
+			time.Sleep(30 * time.Second)
+		}
+	}()
+}
+
+func fetchAndStartNewDetectors() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/detectors", nil)
+	if err != nil {
+		log.Printf("warn: failed to create detector request: %v", err)
+		return
 	}
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/detectors", nil)
-		if err != nil {
-			cancel()
-			log.Printf("warn: failed to create detector request: %v", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		req.Header.Set("X-API-Key", apiKey)
+	req.Header.Set("X-API-Key", apiKey)
 
-		resp, err := client.Do(req)
-		if err != nil {
-			cancel()
-			log.Printf("warn: failed to fetch detectors from DB: %v, retrying in 5s...", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			cancel()
-			log.Printf("warn: detector fetch returned status %d, retrying in 5s...", resp.StatusCode)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		err = json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
-		cancel()
-		if err != nil {
-			log.Printf("warn: failed to decode detectors: %v, retrying in 5s...", err)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		break
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("warn: failed to fetch detectors from DB: %v", err)
+		return
 	}
+	defer resp.Body.Close()
 
-	if len(result.Data) == 0 {
-		log.Println("no drone detectors configured in database, skipping detection")
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("warn: detector fetch returned status %d", resp.StatusCode)
 		return
 	}
 
-	log.Printf("found %d drone detector(s), starting connections...", len(result.Data))
+	var result struct {
+		Data []DetectorEntry `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("warn: failed to decode detectors: %v", err)
+		return
+	}
+
+	startedDetectorsMu.Lock()
+	defer startedDetectorsMu.Unlock()
+
 	for _, d := range result.Data {
+		if startedDetectors[d.ID] {
+			continue // already running
+		}
+		startedDetectors[d.ID] = true
 		label := fmt.Sprintf("detector-%d-%s", d.ID, d.Name)
 		log.Printf("starting detector %q at %s:%d (%.6f, %.6f)", label, d.Host, d.Port, d.Lat, d.Lng)
 		go StartDroneDetector(label, d.Host, d.Port, d.Lat, d.Lng)
