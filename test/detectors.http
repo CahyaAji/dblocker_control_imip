@@ -1,7 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzc5NDc5MDAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.9D5pzHyNnrGwPU8kRuEaRUjrpWYvk5JtWOh7gMBO6wQ
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3Nzk3NTk0MzEsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.a2S3mxVqSAQthCKZtzzR6gaCDBFj_8jKoxM6Xiwrdaw
 
 #############################
 # DRONE DETECTORS
@@ -43,10 +43,10 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name": "Detector 1",
+    "name": "Detector1",
     "latitude": -2.81968,
     "longitude": 122.15309,
-    "host": "10.88.81.16",
+    "host": "172.17.0.1",
     "port": 5555
 }
 
