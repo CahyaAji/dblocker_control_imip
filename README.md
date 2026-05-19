@@ -71,3 +71,8 @@ pkg/                        # optional, reusable helpers (config, telemetry, etc
 db/
   migrations/               # SQL migrations
 ```
+
+```
+29°C	30°C	31°C	32°C
+387	  397	  407	  418
+```
