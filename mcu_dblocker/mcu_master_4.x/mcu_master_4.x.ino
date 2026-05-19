@@ -76,6 +76,8 @@ unsigned long lastSlaveMessage = 0;
 unsigned long lastHeartbeat = 0;
 unsigned long lastConnectionTime = 0;
 unsigned long lastLinkDownTime = 0;
+unsigned long lastFanCheck = 0;
+unsigned long lastFanToggle = 0;
 
 int mqttReconnectFailures = 0;
 const int MAX_MQTT_RECONNECT_FAILURES = 4;
@@ -400,6 +402,44 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
+void controlFan() {
+  if (!safetyShutdownActive) return;
+
+  static uint8_t overTempCount = 0;
+  static uint8_t underTempCount = 0;
+  const uint8_t CONFIRM_COUNT = 3; // require 3 consecutive reads (~6 sec) before switching
+
+  int tempRaw = analogRead(TEMP_SENSOR_PIN);
+
+  if (tempRaw > 410) {
+    if (overTempCount < CONFIRM_COUNT) overTempCount++;
+    underTempCount = 0;
+  } else if (tempRaw < 390) {
+    if (underTempCount < CONFIRM_COUNT) underTempCount++;
+    overTempCount = 0;
+  } else {
+    // hysteresis zone — reset both, no action
+    overTempCount = 0;
+    underTempCount = 0;
+    return;
+  }
+
+  bool fanOn = (bool)lastMasterState[6];
+  if (overTempCount >= CONFIRM_COUNT) fanOn = true;
+  else if (underTempCount >= CONFIRM_COUNT) fanOn = false;
+  else return; // not enough consecutive reads yet
+
+  if (fanOn != (bool)lastMasterState[6]) {
+    unsigned long now = millis();
+    if (now - lastFanToggle < 60000) return; // cooldown: max 1 toggle per 60 sec
+    lastFanToggle = now;
+    lastMasterState[6] = fanOn ? 1 : 0;
+    digitalWrite(outPins[6], fanOn ? HIGH : LOW);
+    lastSlaveState[6] = fanOn ? 1 : 0;
+    syncSlave();
+  }
+}
+
 // --- SETUP ---
 void setup() {
   IWatchdog.begin(20000000); 
@@ -685,5 +725,10 @@ void loop() {
     if (mqttClient.connected()) publishData();
   }
 
-  processSlaveSerial(); 
+  processSlaveSerial();
+
+  if (now - lastFanCheck > 2000) {
+    lastFanCheck = now;
+    controlFan();
+  }
 }
