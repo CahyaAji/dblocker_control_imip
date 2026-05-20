@@ -1,4 +1,4 @@
-// MASTER (STM32F411CEU6) v4.3 - OTA Final (Byte-for-Byte Verification)
+// MASTER (STM32F411CEU6) v4.4 - OTA Final (Byte-for-Byte Verification)
 #include <SPI.h>
 #include <Ethernet.h>
 #include <EthernetUdp.h>
