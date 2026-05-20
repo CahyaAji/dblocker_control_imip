@@ -411,6 +411,13 @@ void controlFan() {
 
   int tempRaw = analogRead(TEMP_SENSOR_PIN);
 
+  if (tempRaw <= 0) {
+    // invalid reading (sensor shorted to GND) — treat as floating, reset counters
+    overTempCount = 0;
+    underTempCount = 0;
+    return;
+  }
+
   if (tempRaw > 410) {
     if (overTempCount < CONFIRM_COUNT) overTempCount++;
     underTempCount = 0;
