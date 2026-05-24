@@ -682,6 +682,7 @@ func scheduleBlockerOff(label, serial string) {
 		holdTimersMu.Unlock()
 		log.Printf("[%s] hold timer expired for dblocker %q — turning off", label, serial)
 		go turnOffBlocker(label, serial)
+		// go applyBlockerDefault(label, serial) // uncomment to restore default config instead of turning off
 	})
 	holdTimers[serial] = newTimer
 }
