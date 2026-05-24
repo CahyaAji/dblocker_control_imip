@@ -11,8 +11,8 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "aji",
-    "password": "zxcjkl01"
+    "username": "admin",
+    "password": "admin"
 }
 
 ### 0b. Create User (admin only)
