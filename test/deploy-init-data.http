@@ -17,7 +17,7 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 2. Get DBlocker by ID
-GET {{host}}/api/dblockers/2
+GET {{host}}/api/dblockers/10
 Authorization: Bearer {{token}}
 
 
@@ -29,7 +29,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 8,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
@@ -119,7 +119,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 10,
     "config": [
         {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
@@ -139,7 +139,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 8,
     "config": [
         {"signal_ctrl": true, "signal_gps": true},
         {"signal_ctrl": true, "signal_gps": true},
@@ -234,7 +234,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 9,
+    "id": 10,
     "config": [
         {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": true},
