@@ -1,7 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzkzNjkxMDcsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.skcfSgWnDoZtZNaDmzWVNjmsnPDKET7AuOUGJsITqtg
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA0ODY1ODAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.PkXqv6XKvSFwKprIjk1RQB4CblZTadxcuaFJIuIoaa8
 
 ### 1. Register DBlocker
 POST {{host}}/api/dblockers
@@ -114,16 +114,16 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 3. Get DBlocker by ID
-GET {{host}}/api/dblockers/6
+GET {{host}}/api/dblockers/1
 Authorization: Bearer {{token}}
 
 ### 4. Update DBlocker by ID
-PUT {{host}}/api/dblockers/13
+PUT {{host}}/api/dblockers/1
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "angle_start": -10
+    "angle_start": 0
 }
 
 

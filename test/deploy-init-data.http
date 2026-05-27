@@ -1,8 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3NzkwNzU1NjYsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.MjRDGU5-7TNuawh9Lvl_pOGK3tpoiIH6Pz45Hcxzyto
-
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA0ODY1ODAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.PkXqv6XKvSFwKprIjk1RQB4CblZTadxcuaFJIuIoaa8
 
 ### 0. Login (get token)
 POST {{host}}/api/auth/login
@@ -18,7 +17,7 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 2. Get DBlocker by ID
-GET {{host}}/api/dblockers/6
+GET {{host}}/api/dblockers/2
 Authorization: Bearer {{token}}
 
 
@@ -48,7 +47,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 1,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": false, "signal_gps": false},
@@ -159,7 +158,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 1,
     "config": [
         {"signal_ctrl": true, "signal_gps": true},
         {"signal_ctrl": false, "signal_gps": false},
