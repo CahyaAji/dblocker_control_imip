@@ -65,7 +65,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 3,
     "config": [
         {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": false, "signal_gps": false},
@@ -83,7 +83,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 4,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
@@ -101,7 +101,7 @@ Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 11,
+    "id": 5,
     "config": [
         {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": false, "signal_gps": false},
@@ -166,5 +166,81 @@ Authorization: Bearer {{token}}
         {"signal_ctrl": false, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": true},
         {"signal_ctrl": true, "signal_gps": true}
+    ]
+}
+
+
+### 4c. Save Preset Config (store preset ON state for a dblocker)
+#### blocker no 3
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 3,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true}
+    ]
+}
+
+
+### 4d. Save Preset Config (store preset ON state for a dblocker)
+#### blocker no 4
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 4,
+    "config": [
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": true}
+    ]
+}
+
+
+### 4e. Save Preset Config (store preset ON state for a dblocker)
+#### blocker no 5
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 5,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": false}
+    ]
+}
+
+
+### 4f. Save Preset Config (store preset ON state for a dblocker)
+#### blocker no 9, 10
+PUT {{host}}/api/dblockers/preset
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+    "id": 9,
+    "config": [
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": true, "signal_gps": true},
+        {"signal_ctrl": false, "signal_gps": false},
+        {"signal_ctrl": false, "signal_gps": false}
     ]
 }
