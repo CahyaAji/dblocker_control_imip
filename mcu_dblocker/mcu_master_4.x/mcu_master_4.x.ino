@@ -32,9 +32,9 @@ uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
 uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 // Controller & Network Config ========================
-const char controller_id[] = "250005";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x15, 0x05 };
-IPAddress ip(10, 88, 81, 6);
+const char controller_id[] = "250010";
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x20, 0x10 };
+IPAddress ip(10, 88, 81, 11);
 IPAddress gateway(10, 88, 81, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress myDns(8, 8, 8, 8);
