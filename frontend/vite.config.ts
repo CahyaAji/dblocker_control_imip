@@ -12,6 +12,7 @@ export default defineConfig({
         logs: resolve(__dirname, 'logs.html'),
         detections: resolve(__dirname, 'detections.html'),
         camera: resolve(__dirname, 'camera.html'),
+        whitelist: resolve(__dirname, 'whitelist.html'),
       },
     },
   },
