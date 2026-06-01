@@ -29,12 +29,14 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	detectorRepo := repository.NewDetectorRepository(db)
 	droneEventRepo := repository.NewDroneEventRepository(db)
 	appSettingRepo := repository.NewAppSettingRepository(db)
+	whitelistRepo := repository.NewWhitelistRepository(db)
 
 	dblockerHandler := handlerhttp.NewDBlockerHandler(dblockerRepo, actionLogRepo, mqttClient, bridgeService, sleepSchedule)
 	authHandler := handlerhttp.NewAuthHandler(authService)
 	scheduleHandler := handlerhttp.NewScheduleHandler(scheduleRepo, actionLogRepo, dblockerRepo)
 	actionLogHandler := handlerhttp.NewActionLogHandler(actionLogRepo)
 	detectorHandler := handlerhttp.NewDetectorHandlerWithSettings(detectorRepo, droneEventRepo, appSettingRepo)
+	whitelistHandler := handlerhttp.NewWhitelistHandler(whitelistRepo)
 
 	// Public routes
 	r.POST("/api/auth/login", authHandler.Login)
@@ -105,6 +107,11 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 	api.GET("/detectors/settings", detectorHandler.GetDetectionSettings)
 	api.PUT("/detectors/settings", detectorHandler.UpdateDetectionSettings)
 
+	// Drone Whitelist
+	api.GET("/whitelist", whitelistHandler.GetWhitelist)
+	api.POST("/whitelist", whitelistHandler.CreateWhitelistEntry)
+	api.DELETE("/whitelist/:id", whitelistHandler.DeleteWhitelistEntry)
+
 	// Vision proxy: forward /cam/* to the vision server
 	visionURL := os.Getenv("VISION_URL")
 	if visionURL == "" {
@@ -150,6 +157,9 @@ func RegisterHTTPRoutes(r *gin.Engine, db *gorm.DB, mqttClient mqtt.Client, brid
 		})
 		r.GET("/camera", func(ctx *gin.Context) {
 			ctx.File(filepath.Join(frontendDist, "camera.html"))
+		})
+		r.GET("/whitelist", func(ctx *gin.Context) {
+			ctx.File(filepath.Join(frontendDist, "whitelist.html"))
 		})
 	} else {
 		r.GET("/dashboard", func(ctx *gin.Context) {

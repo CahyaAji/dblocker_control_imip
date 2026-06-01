@@ -47,6 +47,15 @@ var (
 	detectionFilterMu          sync.RWMutex
 )
 
+// whitelistUniqueIDs and whitelistTargetNames cache the drone whitelist from the backend.
+// Drones matching either set are logged but will NOT trigger dblocker activation.
+// Refreshed on the same 60-second polling cycle as hold settings.
+var (
+	whitelistUniqueIDs   = map[string]bool{}
+	whitelistTargetNames = map[string]bool{}
+	whitelistMu          sync.RWMutex
+)
+
 // mqttDetectPublisher is set by main() after MQTT connects.
 // If nil, MQTT publishing is skipped.
 var mqttDetectPublisher mqttPublisher
@@ -613,6 +622,16 @@ func refreshBlockerCache() error {
 // autoActivateBlockers applies the detector→heading→dblocker mapping rules
 // and fires preset-ON for each matched dblocker.
 func autoActivateBlockers(label string, d DroneData) {
+	// Check whitelist — whitelisted drones are observed but never trigger blockers.
+	whitelistMu.RLock()
+	whitelisted := (d.UniqueID != "" && whitelistUniqueIDs[d.UniqueID]) ||
+		(d.TargetName != "" && whitelistTargetNames[d.TargetName])
+	whitelistMu.RUnlock()
+	if whitelisted {
+		log.Printf("[%s] drone whitelisted (uid=%q target=%q) — skipping blocker activation", label, d.UniqueID, d.TargetName)
+		return
+	}
+
 	// Parse detector name from label format "detector-{id}-{name}"
 	parts := strings.SplitN(label, "-", 3)
 	if len(parts) < 3 {
@@ -854,6 +873,58 @@ func fetchAndUpdateHoldSeconds() {
 	detectionMinConfidence = result.Data.MinConfidence
 	detectionMinSignalStrength = result.Data.MinSignalStrength
 	detectionFilterMu.Unlock()
+
+	fetchAndUpdateWhitelist()
+}
+
+// fetchAndUpdateWhitelist pulls the current drone whitelist from the backend
+// and refreshes the in-memory cache used by autoActivateBlockers.
+func fetchAndUpdateWhitelist() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "GET", backendURL+"/api/whitelist", nil)
+	if err != nil {
+		return
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("warn: whitelist poll returned status %d, keeping previous list", resp.StatusCode)
+		return
+	}
+
+	var result struct {
+		Data []struct {
+			Type  string `json:"type"`
+			Value string `json:"value"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return
+	}
+
+	newUIDs := map[string]bool{}
+	newTargets := map[string]bool{}
+	for _, entry := range result.Data {
+		switch entry.Type {
+		case "unique_id":
+			newUIDs[entry.Value] = true
+		case "target_name":
+			newTargets[entry.Value] = true
+		}
+	}
+
+	whitelistMu.Lock()
+	whitelistUniqueIDs = newUIDs
+	whitelistTargetNames = newTargets
+	whitelistMu.Unlock()
 }
 
 // calcBearing returns the bearing in degrees (0-360) from point A to point B.
