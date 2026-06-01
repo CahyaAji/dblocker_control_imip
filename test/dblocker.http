@@ -1,7 +1,7 @@
-# @host = http://10.88.81.16:8080
-@host = http://localhost:8080
+@host = http://10.88.81.16:8080
+# @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA0ODY1ODAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.PkXqv6XKvSFwKprIjk1RQB4CblZTadxcuaFJIuIoaa8
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA4OTg2NjAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6InNjbSJ9.5AM4fsjfM4eBlufEYJq6xWp8gWivWKUR4pGvmNhOK2U
 
 ###
 http://{{host}}/dashboard
@@ -11,7 +11,7 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "aji",
+    "username": "scm",
     "password": "zxcjkl01"
 }
 
@@ -149,17 +149,17 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 3. Get DBlocker by ID
-GET {{host}}/api/dblockers/13
+GET {{host}}/api/dblockers/7
 Authorization: Bearer {{token}}
 
 ### 4. Update DBlocker by ID
-PUT {{host}}/api/dblockers/6
+PUT {{host}}/api/dblockers/7
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "angle_start": 0,
-    "ip": "10.88.81.2"
+    "latitude": -2.8159067,
+    "longitude": 122.164554
 }
 
 
