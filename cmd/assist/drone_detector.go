@@ -39,6 +39,14 @@ var (
 	autoFlagsMu        sync.RWMutex
 )
 
+// Detection quality filters. 0 = disabled for confidence; 0 = disabled for signal (signal is negative dB).
+// Refreshed from backend settings via startHoldSettingSync.
+var (
+	detectionMinConfidence     uint8   = 0
+	detectionMinSignalStrength float64 = 0
+	detectionFilterMu          sync.RWMutex
+)
+
 // mqttDetectPublisher is set by main() after MQTT connects.
 // If nil, MQTT publishing is skipped.
 var mqttDetectPublisher mqttPublisher
@@ -322,6 +330,20 @@ func parseDroneData(label string, data []byte) {
 
 	// LOGIC MARK: Detection processing starts here. No frequency filter is applied.
 
+	// Quality filter: drop frames that don't meet the configured thresholds.
+	detectionFilterMu.RLock()
+	confThresh := detectionMinConfidence
+	sigThresh := detectionMinSignalStrength
+	detectionFilterMu.RUnlock()
+	if confThresh > 0 && d.Confidence < confThresh {
+		log.Printf("[%s] filtered: confidence %d%% < threshold %d%% (target=%s)", label, d.Confidence, confThresh, d.TargetName)
+		return
+	}
+	if sigThresh < 0 && d.SignalStrength < sigThresh {
+		log.Printf("[%s] filtered: signal %.2f dB < threshold %.2f dB (target=%s)", label, d.SignalStrength, sigThresh, d.TargetName)
+		return
+	}
+
 	// Deduplication: skip DB write only when name AND heading are unchanged
 	// AND the last saved write for this drone was less than detectionDedupWindow ago.
 	// If the same drone is seen continuously for >= detectionDedupWindow, the next
@@ -405,19 +427,20 @@ func publishDetectionToMQTT(label string, d DroneData, saved bool) {
 		return
 	}
 	payload := map[string]any{
-		"detector":    label,
-		"unique_id":   d.UniqueID,
-		"target_name": d.TargetName,
-		"drone_lat":   float64(d.DroneLatitude),
-		"drone_lng":   float64(d.DroneLongitude),
-		"drone_alt":   int(d.DroneAltitude),
-		"heading":     int(d.DirectionAngle),
-		"distance":    int(d.Distance),
-		"speed":       d.FlightSpeed,
-		"frequency":   d.Frequency,
-		"confidence":  int(d.Confidence),
-		"saved":       saved,
-		"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		"detector":        label,
+		"unique_id":       d.UniqueID,
+		"target_name":     d.TargetName,
+		"drone_lat":       float64(d.DroneLatitude),
+		"drone_lng":       float64(d.DroneLongitude),
+		"drone_alt":       int(d.DroneAltitude),
+		"heading":         int(d.DirectionAngle),
+		"distance":        int(d.Distance),
+		"speed":           d.FlightSpeed,
+		"frequency":       d.Frequency,
+		"signal_strength": d.SignalStrength,
+		"confidence":      int(d.Confidence),
+		"saved":           saved,
+		"timestamp":       time.Now().UTC().Format(time.RFC3339),
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -431,19 +454,20 @@ func publishDetectionToMQTT(label string, d DroneData, saved bool) {
 // postDroneEvent sends a detected drone event to the backend API.
 func postDroneEvent(label string, d DroneData) {
 	payload := map[string]any{
-		"detector":    label,
-		"unique_id":   d.UniqueID,
-		"target_name": d.TargetName,
-		"drone_lat":   float64(d.DroneLatitude),
-		"drone_lng":   float64(d.DroneLongitude),
-		"drone_alt":   int(d.DroneAltitude),
-		"heading":     int(d.DirectionAngle),
-		"distance":    int(d.Distance),
-		"speed":       d.FlightSpeed,
-		"frequency":   d.Frequency,
-		"confidence":  d.Confidence,
-		"remote_lat":  float64(d.RemoteLat),
-		"remote_lng":  float64(d.RemoteLong),
+		"detector":        label,
+		"unique_id":       d.UniqueID,
+		"target_name":     d.TargetName,
+		"drone_lat":       float64(d.DroneLatitude),
+		"drone_lng":       float64(d.DroneLongitude),
+		"drone_alt":       int(d.DroneAltitude),
+		"heading":         int(d.DirectionAngle),
+		"distance":        int(d.Distance),
+		"speed":           d.FlightSpeed,
+		"frequency":       d.Frequency,
+		"signal_strength": d.SignalStrength,
+		"confidence":      d.Confidence,
+		"remote_lat":      float64(d.RemoteLat),
+		"remote_lng":      float64(d.RemoteLong),
 	}
 
 	body, err := json.Marshal(payload)
@@ -680,9 +704,9 @@ func scheduleBlockerOff(label, serial string) {
 		}
 		delete(holdTimers, serial)
 		holdTimersMu.Unlock()
-		log.Printf("[%s] hold timer expired for dblocker %q — turning off", label, serial)
-		go turnOffBlocker(label, serial)
-		// go applyBlockerDefault(label, serial) // uncomment to restore default config instead of turning off
+		log.Printf("[%s] hold timer expired for dblocker %q - restoring default config", label, serial)
+		// go turnOffBlocker(label, serial)
+		go applyBlockerDefault(label, serial) // uncomment to restore default config instead of turning off
 	})
 	holdTimers[serial] = newTimer
 }
@@ -807,9 +831,11 @@ func fetchAndUpdateHoldSeconds() {
 
 	var result struct {
 		Data struct {
-			HoldSeconds int  `json:"hold_seconds"`
-			AutoBlocker bool `json:"auto_blocker"`
-			AutoCamera  bool `json:"auto_camera"`
+			HoldSeconds       int     `json:"hold_seconds"`
+			AutoBlocker       bool    `json:"auto_blocker"`
+			AutoCamera        bool    `json:"auto_camera"`
+			MinConfidence     uint8   `json:"min_confidence"`
+			MinSignalStrength float64 `json:"min_signal_strength"`
 		} `json:"data"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -824,6 +850,10 @@ func fetchAndUpdateHoldSeconds() {
 	autoBlockerEnabled = result.Data.AutoBlocker
 	autoCameraEnabled = result.Data.AutoCamera
 	autoFlagsMu.Unlock()
+	detectionFilterMu.Lock()
+	detectionMinConfidence = result.Data.MinConfidence
+	detectionMinSignalStrength = result.Data.MinSignalStrength
+	detectionFilterMu.Unlock()
 }
 
 // calcBearing returns the bearing in degrees (0-360) from point A to point B.

@@ -38,6 +38,7 @@
         distance: number;
         speed: number;
         frequency: number;
+        signal_strength: number;
         confidence: number;
         remote_lat: number;
         remote_lng: number;
@@ -52,6 +53,7 @@
         distance: number;
         confidence: number;
         frequency: number;
+        signalStrength: number;
         saved: boolean;
     }
 
@@ -139,6 +141,7 @@
                 distance: Number(d.distance ?? 0),
                 confidence: Number(d.confidence ?? 0),
                 frequency: Number(d.frequency ?? 0),
+                signalStrength: Number(d.signal_strength ?? 0),
                 saved: Boolean(d.saved),
             };
             liveLog = [entry, ...liveLog].slice(0, 10);
@@ -331,8 +334,10 @@
                         <tr>
                             <th>Time ({localTzLabel()})</th>
                             <th>Target</th>
+                            <th>Unique ID</th>
                             <th>Detector</th>
                             <th>Confidence</th>
+                            <th>Signal</th>
                             <th>Position</th>
                             <th>Alt</th>
                             <th>Heading</th>
@@ -352,6 +357,7 @@
                                         ev.unique_id ||
                                         "Unknown"}</td
                                 >
+                                <td class="col-mono col-uid">{ev.unique_id || ""}</td>
                                 <td
                                     ><span class="detector-label"
                                         >{ev.detector}</span
@@ -364,6 +370,7 @@
                                         )}">{ev.confidence}%</span
                                     ></td
                                 >
+                                <td class="col-mono">{ev.signal_strength.toFixed(1)} dB</td>
                                 <td class="col-mono"
                                     >{ev.drone_lat.toFixed(5)}, {ev.drone_lng.toFixed(
                                         5,
@@ -419,7 +426,7 @@
                             <span class="live-target">{entry.targetName}</span>
                             <span class="live-sep">|</span>
                             <span class="live-meta"
-                                >{entry.heading}° &nbsp;{entry.distance}m &nbsp;{entry.confidence}% &nbsp;{entry.frequency.toFixed(
+                                >{entry.heading}° &nbsp;{entry.distance}m &nbsp;{entry.confidence}% &nbsp;{entry.signalStrength.toFixed(1)}dB &nbsp;{entry.frequency.toFixed(
                                     0,
                                 )}kHz</span
                             >
@@ -709,6 +716,14 @@
         font-family: monospace;
         font-variant-numeric: tabular-nums;
         font-size: 11px;
+    }
+
+    .col-uid {
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--text-secondary);
     }
 
     .confidence-badge {

@@ -17,15 +17,19 @@ var (
 	detectionHoldSecs   int = 30
 	detectionHoldSecsMu sync.RWMutex
 
-	detectionAutoBlocker   bool = true
-	detectionAutoCamera    bool = true
-	detectionAutoMu        sync.RWMutex
+	detectionAutoBlocker bool = true
+	detectionAutoCamera  bool = true
+	detectionAutoMu      sync.RWMutex
+
+	detectionMinConfidence     uint8   = 0
+	detectionMinSignalStrength float64 = 0
+	detectionFilterMu          sync.RWMutex
 )
 
 type DetectorHandler struct {
-	DetectorRepo   *repository.DetectorRepository
-	EventRepo      *repository.DroneEventRepository
-	SettingRepo    *repository.AppSettingRepository
+	DetectorRepo *repository.DetectorRepository
+	EventRepo    *repository.DroneEventRepository
+	SettingRepo  *repository.AppSettingRepository
 }
 
 func NewDetectorHandler(detectorRepo *repository.DetectorRepository, eventRepo *repository.DroneEventRepository) *DetectorHandler {
@@ -54,6 +58,20 @@ func (h *DetectorHandler) loadSettingsFromDB() {
 	detectionAutoBlocker = h.SettingRepo.Get("detection.auto_blocker", "true") != "false"
 	detectionAutoCamera = h.SettingRepo.Get("detection.auto_camera", "true") != "false"
 	detectionAutoMu.Unlock()
+	if v := h.SettingRepo.Get("detection.min_confidence", ""); v != "" {
+		if n, err := strconv.ParseUint(v, 10, 8); err == nil {
+			detectionFilterMu.Lock()
+			detectionMinConfidence = uint8(n)
+			detectionFilterMu.Unlock()
+		}
+	}
+	if v := h.SettingRepo.Get("detection.min_signal_strength", ""); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			detectionFilterMu.Lock()
+			detectionMinSignalStrength = f
+			detectionFilterMu.Unlock()
+		}
+	}
 }
 
 // --- Detector CRUD ---
@@ -235,19 +253,27 @@ func (h *DetectorHandler) GetDetectionSettings(c *gin.Context) {
 	autoBlocker := detectionAutoBlocker
 	autoCamera := detectionAutoCamera
 	detectionAutoMu.RUnlock()
+	detectionFilterMu.RLock()
+	minConf := detectionMinConfidence
+	minSig := detectionMinSignalStrength
+	detectionFilterMu.RUnlock()
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{
-		"hold_seconds":  secs,
-		"auto_blocker":  autoBlocker,
-		"auto_camera":   autoCamera,
+		"hold_seconds":        secs,
+		"auto_blocker":        autoBlocker,
+		"auto_camera":         autoCamera,
+		"min_confidence":      minConf,
+		"min_signal_strength": minSig,
 	}})
 }
 
 // UpdateDetectionSettings updates detection settings and persists them to the database.
 func (h *DetectorHandler) UpdateDetectionSettings(c *gin.Context) {
 	var input struct {
-		HoldSeconds *int  `json:"hold_seconds"`
-		AutoBlocker *bool `json:"auto_blocker"`
-		AutoCamera  *bool `json:"auto_camera"`
+		HoldSeconds       *int     `json:"hold_seconds"`
+		AutoBlocker       *bool    `json:"auto_blocker"`
+		AutoCamera        *bool    `json:"auto_camera"`
+		MinConfidence     *uint8   `json:"min_confidence"`
+		MinSignalStrength *float64 `json:"min_signal_strength"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -289,6 +315,22 @@ func (h *DetectorHandler) UpdateDetectionSettings(c *gin.Context) {
 			_ = h.SettingRepo.Set("detection.auto_camera", v)
 		}
 	}
+	if input.MinConfidence != nil {
+		detectionFilterMu.Lock()
+		detectionMinConfidence = *input.MinConfidence
+		detectionFilterMu.Unlock()
+		if h.SettingRepo != nil {
+			_ = h.SettingRepo.Set("detection.min_confidence", strconv.Itoa(int(*input.MinConfidence)))
+		}
+	}
+	if input.MinSignalStrength != nil {
+		detectionFilterMu.Lock()
+		detectionMinSignalStrength = *input.MinSignalStrength
+		detectionFilterMu.Unlock()
+		if h.SettingRepo != nil {
+			_ = h.SettingRepo.Set("detection.min_signal_strength", strconv.FormatFloat(*input.MinSignalStrength, 'f', 2, 64))
+		}
+	}
 	detectionHoldSecsMu.RLock()
 	secs := detectionHoldSecs
 	detectionHoldSecsMu.RUnlock()
@@ -296,9 +338,15 @@ func (h *DetectorHandler) UpdateDetectionSettings(c *gin.Context) {
 	autoBlocker := detectionAutoBlocker
 	autoCamera := detectionAutoCamera
 	detectionAutoMu.RUnlock()
+	detectionFilterMu.RLock()
+	minConf := detectionMinConfidence
+	minSig := detectionMinSignalStrength
+	detectionFilterMu.RUnlock()
 	c.JSON(http.StatusOK, gin.H{"data": gin.H{
-		"hold_seconds":  secs,
-		"auto_blocker":  autoBlocker,
-		"auto_camera":   autoCamera,
+		"hold_seconds":        secs,
+		"auto_blocker":        autoBlocker,
+		"auto_camera":         autoCamera,
+		"min_confidence":      minConf,
+		"min_signal_strength": minSig,
 	}})
 }

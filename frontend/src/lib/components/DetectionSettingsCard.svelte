@@ -6,6 +6,8 @@
     let holdSeconds = $state(30);
     let autoBlocker = $state(true);
     let autoCamera = $state(true);
+    let minConfidence = $state(0);
+    let minSignalStrength = $state(0);
     let saving = $state(false);
     let error = $state("");
     let success = $state("");
@@ -18,6 +20,8 @@
                 holdSeconds = json.data.hold_seconds;
                 autoBlocker = json.data.auto_blocker ?? true;
                 autoCamera = json.data.auto_camera ?? true;
+                minConfidence = json.data.min_confidence ?? 0;
+                minSignalStrength = json.data.min_signal_strength ?? 0;
             }
         } catch {
             error = "Failed to load detection settings";
@@ -36,6 +40,8 @@
                     hold_seconds: holdSeconds,
                     auto_blocker: autoBlocker,
                     auto_camera: autoCamera,
+                    min_confidence: minConfidence,
+                    min_signal_strength: minSignalStrength,
                 }),
             });
             if (res.ok) {
@@ -56,6 +62,17 @@
         const next = holdSeconds + delta;
         if (next >= 5 && next <= 3600) holdSeconds = next;
     }
+
+    function adjustConf(delta: number) {
+        const next = minConfidence + delta;
+        if (next >= 0 && next <= 100) minConfidence = next;
+    }
+
+    function adjustSig(delta: number) {
+        const next = minSignalStrength + delta;
+        // range: -120 (very weak) to 0 (disabled)
+        if (next >= -120 && next <= 0) minSignalStrength = next;
+    }
 </script>
 
 <div class="card">
@@ -70,6 +87,30 @@
             <button class="step-btn" onclick={() => adjust(-5)}>−</button>
             <span class="value">{holdSeconds} s</span>
             <button class="step-btn" onclick={() => adjust(5)}>+</button>
+        </div>
+    </div>
+
+    <div class="threshold-row">
+        <div class="label">
+            <span class="dot dot-conf"></span>
+            Min confidence
+        </div>
+        <div class="stepper">
+            <button class="step-btn" onclick={() => adjustConf(-5)}>−</button>
+            <span class="value">{minConfidence === 0 ? "Off" : `${minConfidence}%`}</span>
+            <button class="step-btn" onclick={() => adjustConf(5)}>+</button>
+        </div>
+    </div>
+
+    <div class="threshold-row">
+        <div class="label">
+            <span class="dot dot-sig"></span>
+            Min signal strength
+        </div>
+        <div class="stepper">
+            <button class="step-btn" onclick={() => adjustSig(-5)}>−</button>
+            <span class="value">{minSignalStrength === 0 ? "Off" : `${minSignalStrength} dB`}</span>
+            <button class="step-btn" onclick={() => adjustSig(5)}>+</button>
         </div>
     </div>
 
@@ -163,6 +204,8 @@
 
     .dot-blocker { background: #e74c3c; }
     .dot-camera  { background: #f39c12; }
+    .dot-conf    { background: #9b59b6; }
+    .dot-sig     { background: #1abc9c; }
 
     .toggle-btn {
         position: relative;
