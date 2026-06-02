@@ -1,15 +1,15 @@
-# @host = http://10.88.81.16:8080
-@host = http://localhost:8080
+@host = http://10.88.81.16:8080
+# @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA0ODY1ODAsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.PkXqv6XKvSFwKprIjk1RQB4CblZTadxcuaFJIuIoaa8
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA5Njc0ODMsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoxLCJ1c2VybmFtZSI6ImFkbWluIn0.A0vdEbekJH9u2Dfg7ERlg4ej1r7JyWgIsub3TsdlePU
 
 ### 0. Login (get token)
 POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-    "username": "aji",
-    "password": "zxcjkl01"
+    "username": "admin",
+    "password": "admin"
 }
 
 ### 1. Get All DBlockers
@@ -17,7 +17,7 @@ GET {{host}}/api/dblockers
 Authorization: Bearer {{token}}
 
 ### 2. Get DBlocker by ID
-GET {{host}}/api/dblockers/10
+GET {{host}}/api/dblockers/7
 Authorization: Bearer {{token}}
 
 
@@ -77,13 +77,13 @@ Authorization: Bearer {{token}}
 }
 
 ### 3d. Update DBlocker Default Config
-#### blocker no 4
+#### blocker no 4, 7
 PUT {{host}}/api/dblockers/default
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 4,
+    "id": 7,
     "config": [
         {"signal_ctrl": true, "signal_gps": false},
         {"signal_ctrl": true, "signal_gps": false},
@@ -190,13 +190,13 @@ Authorization: Bearer {{token}}
 
 
 ### 4d. Save Preset Config (store preset ON state for a dblocker)
-#### blocker no 4
+#### blocker no 4, 7
 PUT {{host}}/api/dblockers/preset
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "id": 4,
+    "id": 7,
     "config": [
         {"signal_ctrl": true, "signal_gps": true},
         {"signal_ctrl": true, "signal_gps": true},
