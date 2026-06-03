@@ -32,9 +32,9 @@ uint32_t outPins[7] = { PB10, PB12, PA12, PB6, PB7, PB8, PB9 };
 uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 // Controller & Network Config ========================
-const char controller_id[] = "250010";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x20, 0x10 };
-IPAddress ip(10, 88, 81, 11);
+const char controller_id[] = "250002";
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x02 };
+IPAddress ip(10, 88, 81, 3);
 IPAddress gateway(10, 88, 81, 1);
 IPAddress subnet(255, 255, 255, 0);
 IPAddress myDns(8, 8, 8, 8);
@@ -78,6 +78,9 @@ unsigned long lastConnectionTime = 0;
 unsigned long lastLinkDownTime = 0;
 unsigned long lastFanCheck = 0;
 unsigned long lastFanToggle = 0;
+unsigned long lastW5500Health = 0;
+unsigned long lastSuccessfulPublish = 0;
+const unsigned long W5500_HEALTH_TIMEOUT = 60000; // reset W5500 if no successful publish in 60s while connected
 
 int mqttReconnectFailures = 0;
 const int MAX_MQTT_RECONNECT_FAILURES = 4;
@@ -172,7 +175,7 @@ void checkForFirmwareUpdate() {
   otaServer.begin();
   unsigned long bootWait = millis();
   
-  while (millis() - bootWait < 5000) {
+  while (millis() - bootWait < 15000) {
     IWatchdog.reload(); 
 
     if (millis() % 200 < 100) digitalWrite(LED_PIN, HIGH);
@@ -321,7 +324,9 @@ void publishData() {
   int tail = snprintf(msg + offset, sizeof(msg) - offset, "%d|%d", tempRaw, slaveConnected ? 1 : 0);
   if (tail <= 0) msg[offset] = '\0';
 
-  mqttClient.publish(topic_pub, msg);
+  if (mqttClient.publish(topic_pub, msg)) {
+    lastSuccessfulPublish = millis();
+  }
   digitalWrite(LED_PIN, !digitalRead(LED_PIN));
 }
 
@@ -472,10 +477,11 @@ void setup() {
 
   generateIds();
   if (!isControllerIdValid()) {
-    while (true) {
+    for (int i = 0; i < 20; i++) {
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));
       delay(100);
     }
+    NVIC_SystemReset();
   }
   
   SPI.setMOSI(W5500_MOSI);
@@ -485,14 +491,18 @@ void setup() {
   Ethernet.init(W5500_CS);
   Ethernet.begin(mac, ip, myDns, gateway, subnet);
 
+  // Rescue window opens BEFORE hardware check — so OTA always works on boot
+  checkForFirmwareUpdate();
+
   if (Ethernet.hardwareStatus() == EthernetNoHardware) {
-    while (true) {
+    // W5500 not detected — blink fast then reset and retry
+    for (int i = 0; i < 40; i++) {
+      IWatchdog.reload();
       digitalWrite(LED_PIN, !digitalRead(LED_PIN));
       delay(50);
     }
+    NVIC_SystemReset();
   }
-
-  checkForFirmwareUpdate();
   applyDefaultPins();
 
   mqttClient.setBufferSize(512);
@@ -501,6 +511,7 @@ void setup() {
   udpServer.begin(UDP_PORT);
   syncSlave();
   lastConnectionTime = millis();
+  lastSuccessfulPublish = millis();
   mqttReconnectFailures = 0;
   
   IWatchdog.reload(); 
@@ -630,6 +641,15 @@ void loop() {
     mqttClient.loop();
     lastConnectionTime = now;
     mqttReconnectFailures = 0;
+
+    // Detect W5500 lockup: connected but publishes silently failing
+    if (lastSuccessfulPublish > 0 && now - lastSuccessfulPublish > W5500_HEALTH_TIMEOUT) {
+      lastSuccessfulPublish = now;
+      resetW5500();
+      lastConnectionTime = now;
+      lastMqttRetry = now;
+      mqttReconnectFailures = 0;
+    }
   }
 
   int packetSize = udpServer.parsePacket();
