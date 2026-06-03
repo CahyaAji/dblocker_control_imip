@@ -31,7 +31,7 @@ const net = require('net');
 const fs = require('fs');
 
 // --- CONFIGURATION ---
-const TARGET_IP = '10.88.81.10';
+const TARGET_IP = '10.88.81.3';
 const TCP_PORT = 8080;
 const RETRY_INTERVAL_MS = 500;
 
