@@ -40,6 +40,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize bridge service: %v", err)
 	}
+	bridgeSvc.SetLastOnlineUpdater(dblockerRepo)
 
 	// Wire auto-off callback: turn off all sectors when temperature exceeds limit
 	fanControlSvc.SetAutoOffCallback(func(serial string) {

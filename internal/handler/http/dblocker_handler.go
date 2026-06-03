@@ -497,6 +497,12 @@ func (h *DBlockerHandler) PresetOnDBlockerConfig(c *gin.Context) {
 		return
 	}
 
+	// Block preset ON if device is offline
+	if h.Bridge != nil && !h.Bridge.IsOnline(dblocker.SerialNumb) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "device is offline, cannot apply preset ON"})
+		return
+	}
+
 	// Block preset ON if device is overheating
 	if h.Bridge != nil && h.Bridge.FanControl() != nil && h.Bridge.FanControl().IsOverheating(dblocker.SerialNumb) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "device temperature exceeds safe limit, cannot turn on sectors"})
@@ -772,6 +778,12 @@ func (h *DBlockerHandler) DefaultOnDBlockerConfig(c *gin.Context) {
 	dblocker, err := h.Repo.FindByID(uint(id))
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "dblocker not found"})
+		return
+	}
+
+	// Block default ON if device is offline
+	if h.Bridge != nil && !h.Bridge.IsOnline(dblocker.SerialNumb) {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "device is offline, cannot apply default ON"})
 		return
 	}
 

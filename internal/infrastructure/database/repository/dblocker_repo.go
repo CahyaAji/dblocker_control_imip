@@ -2,6 +2,7 @@ package repository
 
 import (
 	"dblocker_control/internal/models"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -48,4 +49,17 @@ func (r *DBlockerRepository) UpdatePresetConfig(id uint, presetConfig []models.D
 
 func (r *DBlockerRepository) UpdateDefaultConfig(id uint, defaultConfig []models.DBlockerConfig) error {
 	return r.DB.Model(&models.DBlocker{ID: id}).Select("DefaultConfig").Updates(models.DBlocker{DefaultConfig: defaultConfig}).Error
+}
+
+func (r *DBlockerRepository) UpdateLastOnlineAt(serial string, t time.Time) error {
+	return r.DB.Model(&models.DBlocker{}).
+		Where("serial_numb = ?", serial).
+		Update("last_online_at", t).Error
+}
+
+// FindBySerial returns the dblocker with the given serial number.
+func (r *DBlockerRepository) FindBySerial(serial string) (*models.DBlocker, error) {
+	var d models.DBlocker
+	err := r.DB.Where("serial_numb = ?", serial).First(&d).Error
+	return &d, err
 }

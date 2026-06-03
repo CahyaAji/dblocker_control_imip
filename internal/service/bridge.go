@@ -7,6 +7,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 )
 
 // liveChannelBuf is the buffer size for each SSE subscriber's live /rpt channel.
@@ -22,6 +23,7 @@ type BridgeService struct {
 	refreshMu       sync.Mutex   // serializes concurrent RefreshTopics calls
 	client          mqtt.Client
 	reader          DBlockerReader
+	lastOnline      LastOnlineUpdater // optional; may be nil
 	topics          []string
 	lastByTopic     map[string]mqtt.Message // only /sta topics; one entry per serial
 	lastRptBySerial map[string]string       // latest /rpt payload per serial
@@ -47,6 +49,11 @@ func newBroadcaster() *broadcaster {
 
 type DBlockerReader interface {
 	FindAll() ([]models.DBlocker, error)
+}
+
+// LastOnlineUpdater persists the last-online timestamp for a dblocker serial.
+type LastOnlineUpdater interface {
+	UpdateLastOnlineAt(serial string, t time.Time) error
 }
 
 // NewBridgeService wires the MQTT subscription to the broadcaster.
@@ -259,6 +266,12 @@ func (b *BridgeService) Monitor() *CurrentMonitorService {
 	return b.monitor
 }
 
+// SetLastOnlineUpdater wires a repository so BridgeService can persist
+// last-online timestamps when a /sta message indicates a device is online.
+func (b *BridgeService) SetLastOnlineUpdater(u LastOnlineUpdater) {
+	b.lastOnline = u
+}
+
 // FanControl returns the fan control service.
 func (b *BridgeService) FanControl() *FanControlService {
 	return b.fanControl
@@ -269,6 +282,20 @@ func (b *BridgeService) LastRpt(serial string) string {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.lastRptBySerial[serial]
+}
+
+// IsOnline reports whether the device with the given serial number is currently
+// online (i.e. its retained /sta payload is present and not "OFF").
+func (b *BridgeService) IsOnline(serial string) bool {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	topic := fmt.Sprintf("dbl/%s/sta", serial)
+	msg, ok := b.lastByTopic[topic]
+	if !ok {
+		return false
+	}
+	payload := strings.TrimSpace(string(msg.Payload))
+	return payload != "" && payload != "OFF"
 }
 
 // SubscribeWithSnapshot atomically takes a /sta snapshot and creates subscriber
@@ -309,6 +336,21 @@ func (b *BridgeService) broadcast(msg mqtt.Message) {
 		b.mu.Lock()
 		b.lastByTopic[msg.Topic] = msg
 		b.mu.Unlock()
+
+		// Stamp last-online time when the device reports an online status.
+		payload := strings.TrimSpace(string(msg.Payload))
+		if payload != "" && payload != "OFF" && b.lastOnline != nil {
+			// Extract serial: dbl/{serial}/sta
+			parts := strings.SplitN(msg.Topic, "/", 3)
+			if len(parts) == 3 {
+				serial := parts[1]
+				go func() {
+					if err := b.lastOnline.UpdateLastOnlineAt(serial, time.Now()); err != nil {
+						log.Printf("warn: UpdateLastOnlineAt serial=%s: %v", serial, err)
+					}
+				}()
+			}
+		}
 	}
 
 	// Feed /rpt messages to the current monitor
