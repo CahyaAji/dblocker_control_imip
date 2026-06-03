@@ -78,7 +78,6 @@ unsigned long lastConnectionTime = 0;
 unsigned long lastLinkDownTime = 0;
 unsigned long lastFanCheck = 0;
 unsigned long lastFanToggle = 0;
-unsigned long lastW5500Health = 0;
 unsigned long lastSuccessfulPublish = 0;
 const unsigned long W5500_HEALTH_TIMEOUT = 60000; // reset W5500 if no successful publish in 60s while connected
 
@@ -204,8 +203,8 @@ void checkForFirmwareUpdate() {
         client.stop();           
         delay(500);
         
-        // Basic sanity check for recovery window
-        if (totalReceived > 10000) { 
+        // Sanity check: must be at least 30000 bytes to be a valid STM32F411 firmware
+        if (totalReceived > 30000) { 
           InternalStorage.apply(); 
         } else {
           NVIC_SystemReset();
@@ -484,12 +483,25 @@ void setup() {
     NVIC_SystemReset();
   }
   
-  SPI.setMOSI(W5500_MOSI);
-  SPI.setMISO(W5500_MISO);
-  SPI.setSCLK(W5500_SCK);
-  SPI.begin();
-  Ethernet.init(W5500_CS);
-  Ethernet.begin(mac, ip, myDns, gateway, subnet);
+  // Try W5500 init up to 3 times — gives W5500 a chance to recover before rescue window
+  for (int attempt = 0; attempt < 3; attempt++) {
+    IWatchdog.reload();
+    SPI.setMOSI(W5500_MOSI);
+    SPI.setMISO(W5500_MISO);
+    SPI.setSCLK(W5500_SCK);
+    SPI.begin();
+    Ethernet.init(W5500_CS);
+    Ethernet.begin(mac, ip, myDns, gateway, subnet);
+    if (Ethernet.hardwareStatus() != EthernetNoHardware) break;
+    // Hard reset W5500 and retry
+    SPI.end();
+    digitalWrite(W5500_RST, LOW);
+    delay(200);
+    IWatchdog.reload();
+    digitalWrite(W5500_RST, HIGH);
+    delay(500);
+    IWatchdog.reload();
+  }
 
   // Rescue window opens BEFORE hardware check — so OTA always works on boot
   checkForFirmwareUpdate();
@@ -749,7 +761,13 @@ void loop() {
 
   if (now - lastPublish > 2000) {
     lastPublish = now;
-    if (mqttClient.connected()) publishData();
+    if (mqttClient.connected()) {
+      if (isSystemSleeping || safetyShutdownActive) {
+        lastSuccessfulPublish = now; // W5500 is healthy, just not publishing data
+      } else {
+        publishData();
+      }
+    }
   }
 
   processSlaveSerial();
