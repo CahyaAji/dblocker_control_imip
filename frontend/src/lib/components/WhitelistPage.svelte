@@ -7,6 +7,7 @@
         logout,
     } from "../store/authStore";
     import { API_BASE } from "../utils/api";
+    import DroneDetectionToast from "./DroneDetectionToast.svelte";
     import LoginPage from "./LoginPage.svelte";
 
     interface WhitelistEntry {
@@ -145,6 +146,8 @@
         });
     }
 </script>
+
+<DroneDetectionToast />
 
 {#if !$authStore.token}
     <LoginPage />

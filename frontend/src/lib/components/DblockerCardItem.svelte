@@ -80,6 +80,18 @@
     $: isHighTemp = liveTemperatureC !== null && liveTemperatureC > $tempLimitsStore.warnLimit;
     $: isOverheating = liveTemperatureC !== null && liveTemperatureC > $tempLimitsStore.offLimit;
 
+    // --- Last online tracking (sourced from backend, shared across all users) ---
+    function formatLastOnline(iso: string): string {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return '';
+        const now = new Date();
+        const isToday = d.toDateString() === now.toDateString();
+        if (isToday) {
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        }
+        return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+
     // --- Monitor status from backend ---
     let monitorErrors: string[] = [];
     let warningState: "normal" | "error" = "normal";
@@ -102,7 +114,7 @@
     $: warningTitle = warningState === "error"
         ? `Error: ${monitorErrors.join(', ')} current lower than expected`
         : isHighTemp ? `High temperature: ${liveTemperatureC?.toFixed(1)}°C`
-        : !isOnline ? "Device is not online"
+        : !isOnline ? "Device disconnected"
         : slaveConnected === false ? "Slave not connected"
         : "Normal";
 
@@ -226,7 +238,7 @@
                 <div class="card-title">{dblocker.name}</div>
                 <span class="title-separator" aria-hidden="true">|</span>
                 <div class="card-meta" class:status-on={staPayload?.startsWith('ON')} class:status-off={staPayload === 'OFF'} class:status-sleep={staPayload === 'SLEEP'}>
-                    {staLabel}{#if liveTemperatureC !== null} | {liveTemperatureC.toFixed(1)}°C{/if}
+                    {staLabel}{#if liveTemperatureC !== null && isOnline} | {liveTemperatureC.toFixed(1)}°C{/if}{#if !isOnline && dblocker.last_online_at}<span class="last-seen"> | Last On {formatLastOnline(dblocker.last_online_at)}</span>{/if}
                 </div>
             </div>
             <div
@@ -393,6 +405,10 @@
 
     .card-meta.status-sleep {
         color: var(--accent-yellow, #ff9800);
+    }
+
+    .last-seen {
+        font-weight: 600;
     }
 
     .warning-indicator {

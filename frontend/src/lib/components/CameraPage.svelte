@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import DroneDetectionToast from "./DroneDetectionToast.svelte";
   import { settings } from "../store/configStore";
 
   // ── Types ─────────────────────────────────────────────────────────────────
@@ -221,6 +222,8 @@
     return `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
   };
 </script>
+
+<DroneDetectionToast />
 
 <div class="cam-page">
   <!-- ── Top Bar ─────────────────────────────────────────────────────────── -->

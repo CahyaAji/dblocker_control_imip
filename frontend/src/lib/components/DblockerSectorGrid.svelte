@@ -144,12 +144,12 @@
                     <div class="sector-index">{index + 1}</div>
                     <div
                         class="notif"
-                        class:on={config.signal_ctrl}
+                        class:on={config.signal_ctrl && !disabled}
                         title={config.signal_ctrl ? "CTRL ON" : "CTRL OFF"}
                     ></div>
                     <div
                         class="notif"
-                        class:on={config.signal_gps}
+                        class:on={config.signal_gps && !disabled}
                         title={config.signal_gps ? "GPS ON" : "GPS OFF"}
                     ></div>
                 </div>

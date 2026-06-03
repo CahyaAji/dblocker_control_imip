@@ -8,6 +8,7 @@
     isAdmin,
   } from "../store/authStore";
   import { API_BASE } from "../utils/api";
+  import DroneDetectionToast from "./DroneDetectionToast.svelte";
   import LoginPage from "./LoginPage.svelte";
 
   interface DBlockerConfig {
@@ -176,6 +177,8 @@
     return parts.length > 0 ? parts.join(" ") : "All OFF";
   }
 </script>
+
+<DroneDetectionToast />
 
 {#if !$authStore.token}
   <LoginPage />

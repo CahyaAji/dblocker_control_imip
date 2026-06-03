@@ -7,6 +7,7 @@
         logout,
     } from "../store/authStore";
     import { API_BASE } from "../utils/api";
+    import DroneDetectionToast from "./DroneDetectionToast.svelte";
     import LoginPage from "./LoginPage.svelte";
     import {
         subscribeBridge,
@@ -235,6 +236,13 @@
         return "low";
     }
 
+    // Parse the detector display name from the stored label "detector-{id}-{name}".
+    function detectorDisplayName(ev: DroneEvent): string {
+        const parts = String(ev.detector ?? "").split("-");
+        if (parts.length >= 3) return parts.slice(2).join("-");
+        return ev.detector || "Unknown";
+    }
+
     function formatLastSeen(ts: string): string {
         if (!ts || ts === "0001-01-01T00:00:00Z") return "Never";
         const d = new Date(ts);
@@ -249,6 +257,8 @@
         });
     }
 </script>
+
+<DroneDetectionToast />
 
 {#if !$authStore.token}
     <LoginPage />
@@ -360,7 +370,7 @@
                                 <td class="col-mono col-uid">{ev.unique_id || ""}</td>
                                 <td
                                     ><span class="detector-label"
-                                        >{ev.detector}</span
+                                        >{detectorDisplayName(ev)}</span
                                     ></td
                                 >
                                 <td

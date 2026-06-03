@@ -3,6 +3,7 @@
   import Map from "./lib/components/Map.svelte";
   import MsgReceiverBox from "./lib/components/MsgReceiverBox.svelte";
   import MsgStatusBox from "./lib/components/MsgStatusBox.svelte";
+  import DroneDetectionToast from "./lib/components/DroneDetectionToast.svelte";
   import SideMenu from "./lib/components/SideMenu.svelte";
   import UserManagement from "./lib/components/UserManagement.svelte";
   import { authStore, logout, verifyToken } from "./lib/store/authStore";
@@ -380,6 +381,8 @@
       </div>
     </main>
   </div>
+
+  <DroneDetectionToast />
 
   {#if showMsgPanel}
     <div class="dev-panel msg-panel" role="region" aria-label="Message panel">
