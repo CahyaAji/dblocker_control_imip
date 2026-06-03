@@ -24,6 +24,7 @@ export interface DBlocker {
     config: DBlockerConfig[];
     preset_config: DBlockerConfig[] | null;
     default_config: DBlockerConfig[] | null;
+    last_online_at: string | null; // ISO 8601 timestamp, null if never seen online
 }
 
 // --- STORE ---
