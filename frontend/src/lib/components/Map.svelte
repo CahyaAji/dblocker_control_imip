@@ -142,9 +142,9 @@
             map.setStyle(MAP_STYLES[$settings.mapStyle]);
             // Re-add source/layers after style change
             map.once("style.load", () => {
-                addSourceAndLayers();
                 addDetectorSourceAndLayers();
                 addCameraSourceAndLayers();
+                addSourceAndLayers();
                 if ($dblockerStore.length > 0) updateMarkers($dblockerStore);
                 if ($detectorStore.length > 0)
                     updateDetectorMarkers($detectorStore);
@@ -705,9 +705,9 @@
         resizeObserver.observe(mapContainer);
 
         map.on("load", () => {
-            addSourceAndLayers();
             addDetectorSourceAndLayers();
             addCameraSourceAndLayers();
+            addSourceAndLayers();
             fetchDetectors();
             fetchCameraDevices();
 
@@ -874,8 +874,8 @@
 
     .map-layout :global(.det-sector) {
         position: absolute;
-        width: 200px;
-        height: 200px;
+        width: 600px;
+        height: 600px;
         top: 0;
         left: 0;
         transform: translate(-50%, -50%);
@@ -886,14 +886,20 @@
     }
 
     .map-layout :global(.det-sector.active) {
-        background: rgba(255, 50, 50, 0.5);
+        background: radial-gradient(
+            circle at 50% 50%,
+            rgba(255, 40, 40, 0.75) 0%,
+            rgba(255, 40, 40, 0.45) 35%,
+            rgba(255, 40, 40, 0.15) 70%,
+            rgba(255, 40, 40, 0.00) 100%
+        );
         opacity: 1;
-        animation: det-sector-pulse 1.2s ease-in-out infinite alternate;
+        animation: det-sector-pulse 1.4s ease-in-out infinite alternate;
     }
 
     @keyframes det-sector-pulse {
-        from { opacity: 0.55; }
-        to   { opacity: 0.95; }
+        from { opacity: 0.6; }
+        to   { opacity: 1.0; }
     }
 
     /* Camera heading needle */
