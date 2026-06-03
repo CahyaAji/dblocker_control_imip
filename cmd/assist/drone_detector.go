@@ -10,6 +10,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,6 +55,13 @@ var (
 	whitelistUniqueIDs   = map[string]bool{}
 	whitelistTargetNames = map[string]bool{}
 	whitelistMu          sync.RWMutex
+)
+
+// pendingRestores tracks dblockers that need a default-config restore but were
+// offline when the hold timer fired. The retry loop replays them every 5s.
+var (
+	pendingRestoresMu sync.Mutex
+	pendingRestores   = map[string]string{} // serial → label
 )
 
 // mqttDetectPublisher is set by main() after MQTT connects.
@@ -508,8 +516,8 @@ func postDroneEvent(label string, d DroneData) {
 	}
 }
 
-// detectorBlockerRules maps (detectorName, headingMin, headingMax) to a list of dblocker serial numbers to preset-ON.
-// headingMax is exclusive on the upper bound and the range wraps at 360.
+// blockerRule maps a heading range to a list of dblocker serial numbers to preset-ON.
+// headingMax is exclusive on the upper bound.
 type blockerRule struct {
 	headingMin     int
 	headingMax     int
@@ -521,30 +529,31 @@ type blockerRule struct {
 //
 // Syntax:
 //
-//	"<detectorName>": {
-//	    {headingMin: <from°>, headingMax: <to°>, blockerSerials: []string{"<serial>", ...}},
-//	    ...
-//	},
+//		<detectorID>: {
+//		    {headingMin: <from°>, headingMax: <to°>, blockerSerials: []string{"<serial>", ...}},
+//		    ...
+//		},
 //
-// - detectorName  : Name of the drone detector (from the database)
-// - headingMin    : start of heading range (inclusive), 0–359
-// - headingMax    : end of heading range (exclusive), 1–360
-// - blockerSerials: one or more dblocker serial numbers to preset-ON when matched
+//	  - detectorID    : Numeric ID of the drone detector (from the database).
+//	    Use the ID — NOT the name — so rules survive detector renames.
+//	  - headingMin    : start of heading range (inclusive), 0–359
+//	  - headingMax    : end of heading range (exclusive), 1–360
+//	  - blockerSerials: one or more dblocker serial numbers to preset-ON when matched
 //
-// Using serial_numb instead of ID makes rules resilient to device re-registration.
+// Using serial_numb instead of ID makes rules resilient to dblocker re-registration.
 //
-// Example: "Detector 1", heading 0–119°  → activate dblocker with serial "250001"
+// Example: detector ID 1, heading 0–89°   → activate dblocker serial "250001"
 //
-//	"Detector 1", heading 120–239° → activate dblocker with serial "250003"
-//	"Detector 2", heading 0–89°   → activate dblockers "250001" AND "250002"
+//	detector ID 1, heading 270–359° → activate dblockers "250001"…"250005"
+//	detector ID 2, heading 0–89°   → activate dblockers "250008" AND "250009"
 //
 // ============================================================
-var detectorRules = map[string][]blockerRule{
-	"Detector1": {
+var detectorRules = map[int][]blockerRule{
+	1: {
 		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250006", "250007"}},
 		{headingMin: 270, headingMax: 360, blockerSerials: []string{"250001", "250002", "250003", "250004", "250005"}},
 	},
-	"Detector2": {
+	2: {
 		{headingMin: 0, headingMax: 90, blockerSerials: []string{"250008", "250009"}},
 		{headingMin: 90, headingMax: 180, blockerSerials: []string{"250009", "250010"}},
 	},
@@ -632,15 +641,19 @@ func autoActivateBlockers(label string, d DroneData) {
 		return
 	}
 
-	// Parse detector name from label format "detector-{id}-{name}"
+	// Parse detector ID from label format "detector-{id}-{name}"
 	parts := strings.SplitN(label, "-", 3)
 	if len(parts) < 3 {
-		log.Printf("[%s] autoActivateBlockers: cannot parse detector name from label", label)
+		log.Printf("[%s] autoActivateBlockers: cannot parse detector ID from label", label)
 		return
 	}
-	detectorName := parts[2]
+	detectorID, err := strconv.Atoi(parts[1])
+	if err != nil {
+		log.Printf("[%s] autoActivateBlockers: invalid detector ID %q in label", label, parts[1])
+		return
+	}
 
-	rules, ok := detectorRules[detectorName]
+	rules, ok := detectorRules[detectorID]
 	if !ok {
 		return // no rules configured for this detector
 	}
@@ -755,10 +768,22 @@ func applyBlockerDefault(label, serial string) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusServiceUnavailable {
+		// Device is offline — queue for retry when it comes back online.
+		log.Printf("[%s] applyBlockerDefault: dblocker %q is offline, queuing for retry", label, serial)
+		pendingRestoresMu.Lock()
+		pendingRestores[serial] = label
+		pendingRestoresMu.Unlock()
+		return
+	}
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("[%s] applyBlockerDefault: dblocker %q returned status %d", label, serial, resp.StatusCode)
 	} else {
 		log.Printf("[%s] ✅ DEFAULT-ON sent to dblocker serial=%q (id=%d) after hold timer", label, serial, blockerID)
+		// Clear any pending retry for this serial since it just succeeded.
+		pendingRestoresMu.Lock()
+		delete(pendingRestores, serial)
+		pendingRestoresMu.Unlock()
 	}
 }
 
@@ -794,12 +819,40 @@ func turnOffBlocker(label, serial string) {
 	}
 }
 
-// startHoldSettingSync polls the backend every minute and updates holdSeconds.
+// startHoldSettingSync polls the backend every 5 seconds and updates holdSeconds.
 func startHoldSettingSync() {
 	go func() {
 		for {
-			time.Sleep(60 * time.Second)
+			time.Sleep(5 * time.Second)
 			fetchAndUpdateHoldSeconds()
+		}
+	}()
+}
+
+// startPendingRestoreRetry retries default-config restores that failed because
+// the device was offline when the hold timer fired. Runs every 5 seconds.
+func startPendingRestoreRetry() {
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+			pendingRestoresMu.Lock()
+			if len(pendingRestores) == 0 {
+				pendingRestoresMu.Unlock()
+				continue
+			}
+			// Snapshot and clear; applyBlockerDefault will re-add if still offline.
+			snap := make(map[string]string, len(pendingRestores))
+			for s, l := range pendingRestores {
+				snap[s] = l
+			}
+			for s := range pendingRestores {
+				delete(pendingRestores, s)
+			}
+			pendingRestoresMu.Unlock()
+			for serial, label := range snap {
+				log.Printf("[%s] retrying pending default restore for dblocker %q", label, serial)
+				go applyBlockerDefault(label, serial)
+			}
 		}
 	}()
 }
