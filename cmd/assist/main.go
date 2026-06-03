@@ -112,6 +112,7 @@ func main() {
 	startDetectorsFromDB()
 	startHoldSettingSync()
 	startDetectionCacheCleanup()
+	startPendingRestoreRetry()
 
 	// Track which schedules already executed this minute to avoid duplicates.
 	// Key: "scheduleID:HH:MM"
