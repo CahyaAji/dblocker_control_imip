@@ -45,7 +45,7 @@ const DRONE_ALT = 120;
 const DRONE_CONFIDENCE = 85;
 
 // Timing
-const HEARTBEAT_INTERVAL_MS = 10000; // 10s
+const HEARTBEAT_INTERVAL_MS = 1000; // 1s
 const DRONE_INTERVAL_MS = 3000; // 3s
 
 // Simulation mode: "always" | "cycle" | "manual"
