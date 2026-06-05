@@ -33,7 +33,7 @@ uint32_t hallSensorPins[9] = { PB0, PA7, PA6, PA5, PA4, PA3, PA2, PA1, PA0 };
 
 // Controller & Network Config ========================
 const char controller_id[] = "250002";
-byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x02 };
+byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0x22, 0x02 };
 IPAddress ip(10, 88, 81, 3);
 IPAddress gateway(10, 88, 81, 1);
 IPAddress subnet(255, 255, 255, 0);
