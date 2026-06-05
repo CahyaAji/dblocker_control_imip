@@ -361,6 +361,16 @@ func parseDroneData(label string, data []byte) {
 		return
 	}
 
+	// Whitelist check: skip DB write, MQTT publish, and toast for whitelisted drones.
+	whitelistMu.RLock()
+	whitelisted := (d.UniqueID != "" && whitelistUniqueIDs[d.UniqueID]) ||
+		(d.TargetName != "" && whitelistTargetNames[d.TargetName])
+	whitelistMu.RUnlock()
+	if whitelisted {
+		log.Printf("[%s] drone whitelisted (uid=%q target=%q) — skipping", label, d.UniqueID, d.TargetName)
+		return
+	}
+
 	// Deduplication: skip DB write only when name AND heading are unchanged
 	// AND the last saved write for this drone was less than detectionDedupWindow ago.
 	// If the same drone is seen continuously for >= detectionDedupWindow, the next
@@ -631,16 +641,6 @@ func refreshBlockerCache() error {
 // autoActivateBlockers applies the detector→heading→dblocker mapping rules
 // and fires preset-ON for each matched dblocker.
 func autoActivateBlockers(label string, d DroneData) {
-	// Check whitelist — whitelisted drones are observed but never trigger blockers.
-	whitelistMu.RLock()
-	whitelisted := (d.UniqueID != "" && whitelistUniqueIDs[d.UniqueID]) ||
-		(d.TargetName != "" && whitelistTargetNames[d.TargetName])
-	whitelistMu.RUnlock()
-	if whitelisted {
-		log.Printf("[%s] drone whitelisted (uid=%q target=%q) — skipping blocker activation", label, d.UniqueID, d.TargetName)
-		return
-	}
-
 	// Parse detector ID from label format "detector-{id}-{name}"
 	parts := strings.SplitN(label, "-", 3)
 	if len(parts) < 3 {
