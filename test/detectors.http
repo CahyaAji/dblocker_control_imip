@@ -1,8 +1,7 @@
 # @host = http://10.88.81.16:8080
 @host = http://localhost:8080
 
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODA4NDY5MDQsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjo2LCJ1c2VybmFtZSI6ImFqaSJ9.TCqZ5wHs7XaPLMPNeq8UHFf_o9u9WKdjO0VsRNikFe4
-
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3ODEyNDY3NTIsImlzX2FkbWluIjp0cnVlLCJ1c2VyX2lkIjoyLCJ1c2VybmFtZSI6InNjbSJ9.TBHfrXTudnYB6baGag4t_E_3LLw0bG8tGiRaTO5BL9Y
 #############################
 # DRONE DETECTORS
 #############################
@@ -38,15 +37,15 @@ GET {{host}}/api/detectors
 Authorization: Bearer {{token}}
 
 ### 13. Update Detector
-PUT {{host}}/api/detectors/1
+PUT {{host}}/api/detectors/2
 Content-Type: application/json
 Authorization: Bearer {{token}}
 
 {
-    "name": "Detector KM2",
-      "latitude": -2.81968,
-      "longitude": 122.15309,
-      "host": "172.17.0.1",
+    "name": "Detector Jetty Labota",
+    "latitude": -2.855106,
+    "longitude": 122.182216,
+    "host": "10.88.81.14",
     "port": 5555
 }
 

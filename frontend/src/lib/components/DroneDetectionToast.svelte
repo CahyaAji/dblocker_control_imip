@@ -80,8 +80,8 @@
         const id = nextId++;
         const timerId = setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
 
-        playAlertSound();
         toasts = [{ id, targetName, detector, heading, distance, confidence, timerId }, ...toasts].slice(0, MAX_TOASTS);
+        setTimeout(playAlertSound, 0);
     });
 
     onMount(() => {
